@@ -1,0 +1,8 @@
+Flask==3.0.2
+flask-cors==4.0.0
+psycopg2-binary==2.9.9
+geoalchemy2==0.14.3
+SQLAlchemy==2.0.27
+python-dotenv==1.0.1
+firebase-admin==6.4.0
+gunicorn==21.2.0 

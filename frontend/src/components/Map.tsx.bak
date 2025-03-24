@@ -1,0 +1,1978 @@
+import React, { useEffect, useState, useRef, forwardRef, useImperativeHandle, useCallback, useContext } from 'react';
+import { Box, Tooltip, Fab, Dialog, DialogTitle, DialogContent, DialogContentText, TextField, DialogActions, Button, Snackbar, Alert } from '@mui/material';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import 'leaflet-draw/dist/leaflet.draw.css';
+import 'leaflet-draw';
+import { getUserRoutes, BikeRoute, getAllApprovedRoutes, deleteRoute, saveRoute, saveNavigationRoute } from '../firebase/routes';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../firebase/index';
+import Navigation, { RouteOptions } from './Navigation';
+import DirectionsIcon from '@mui/icons-material/Directions';
+import { getAllBikeStands, deleteBikeStand } from '../firebase/bikestands';
+import { 
+  getAllNextbikeStations, 
+  getAllRepairStations, 
+  getAllChargingStations, 
+  getAllPois,
+  NextbikeStation,
+  RepairStation,
+  ChargingStation,
+  POI,
+  deletePoi
+} from '../services/poiService';
+import MapLegend from './MapLegend';
+import SaveIcon from '@mui/icons-material/Save';
+import CancelIcon from '@mui/icons-material/Cancel';
+import EditIcon from '@mui/icons-material/Edit';
+import LayersIcon from '@mui/icons-material/Layers';
+import AddLocationIcon from '@mui/icons-material/AddLocation';
+import LocalParkingIcon from '@mui/icons-material/LocalParking';
+
+// Fix for the default marker icon issue in Leaflet with webpack
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+  iconUrl: icon,
+  shadowUrl: iconShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41]
+});
+
+// Kleinerer, zusätzlicher Icon für Routenpunkte
+let RoutePointIcon = L.icon({
+  iconUrl: icon,
+  shadowUrl: iconShadow,
+  iconSize: [15, 25],
+  iconAnchor: [7, 25]
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
+
+// Farben für verschiedene Routen
+const ROUTE_COLORS = [
+  '#3388ff', // Standard Blau
+  '#ff3333', // Rot
+  '#33cc33', // Grün
+  '#9933ff', // Lila
+  '#ff9900', // Orange
+  '#00ccff', // Türkis
+];
+
+// Hilfsfunktion, um für alle Fahrradwege dieselbe Farbe zu erhalten
+const getRouteColor = (routeId: string | undefined): string => {
+  // Alle normalen Fahrradwege erhalten dieselbe Farbe: ein einheitliches Blau
+  return '#2196f3'; // Einheitliches Blau für alle Fahrradwege
+};
+
+// Formatiert die Bewertung für die Anzeige
+const formatRating = (rating: number | null | undefined): string => {
+  if (rating === null || rating === undefined) return 'Keine Bewertung';
+  return `${rating} Sterne`;
+};
+
+// Formatiert die Steigung für die Anzeige
+const formatSlope = (slope: string | null | undefined): string => {
+  if (!slope) return 'Keine Angabe';
+  return slope.charAt(0).toUpperCase() + slope.slice(1); // Kapitalisiere den ersten Buchstaben
+};
+
+// BikeStand Schnittstelle für die Typisierung
+export interface BikeStand {
+  id: string;
+  position: {
+    lat: number;
+    lng: number;
+  };
+  createdAt: Date;
+  createdBy: string;
+  description?: string;
+  capacity?: number;
+  isRoofed?: boolean;
+  isFree?: boolean;
+  isLighted?: boolean;
+  rating?: number;
+}
+
+// Expose refreshRoutes method to parent components
+export interface MapHandle {
+  refreshRoutes: () => Promise<void>;
+  refreshBikeStands: () => Promise<void>;
+  refreshPOIs: () => Promise<void>;
+}
+
+interface MapProps {
+  isDrawingMode: boolean;
+  isBikeStandMode?: boolean;
+  isNextBikeMode?: boolean;
+  isRepairStationMode?: boolean;
+  isChargingStationMode?: boolean;
+  isPoiMode?: boolean;
+  onRouteComplete?: (route: L.LatLng[]) => void;
+  onAddBikeStand?: (position: L.LatLng) => void;
+  onAddPOI?: (position: L.LatLng, poiType: string) => void;
+  searchLocation?: { display_name: string; lat: number; lon: number };
+}
+
+// Zoom-Level-Konstanten für die POI-Sichtbarkeit
+const MIN_ZOOM_LEVEL_POIS = 13;
+const MIN_ZOOM_LEVEL_BIKE_STANDS = 14;
+const MIN_ZOOM_LEVEL_REPAIR_STATIONS = 13;
+const MIN_ZOOM_LEVEL_CHARGING_STATIONS = 13;
+const MIN_ZOOM_LEVEL_NEXTBIKE = 13;
+
+const Map = forwardRef<MapHandle, MapProps>(({ 
+  isDrawingMode, 
+  isBikeStandMode = false,
+  isNextBikeMode = false,
+  isRepairStationMode = false,
+  isChargingStationMode = false,
+  isPoiMode = false,
+  onRouteComplete,
+  onAddBikeStand,
+  onAddPOI,
+  searchLocation
+}, ref) => {
+  // Vorhandene Refs
+  const mapRef = useRef<L.Map | null>(null);
+  const drawingPointsRef = useRef<L.LatLng[]>([]);
+  const polylineRef = useRef<L.Polyline | null>(null);
+  const markersRef = useRef<L.Marker[]>([]);
+  const poiMarkersRef = useRef<L.Marker[]>([]);
+  const bikeStandMarkersRef = useRef<L.Marker[]>([]);
+  const repairStationMarkersRef = useRef<L.Marker[]>([]);
+  const chargingStationMarkersRef = useRef<L.Marker[]>([]);
+  const nextbikeMarkersRef = useRef<L.Marker[]>([]);
+  
+  // Layer-Gruppen für verschiedene POI-Typen
+  const poiLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const bikeStandLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const repairStationLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const chargingStationLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const nextbikeLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  
+  // State für POIs
+  const [pois, setPois] = useState<POI[]>([]);
+  const [bikeStands, setBikeStands] = useState<BikeStand[]>([]);
+  const [repairStations, setRepairStations] = useState<RepairStation[]>([]);
+  const [chargingStations, setChargingStations] = useState<ChargingStation[]>([]);
+  const [nextbikeStations, setNextbikeStations] = useState<NextbikeStation[]>([]);
+  const [currentZoom, setCurrentZoom] = useState<number>(6); // Standard-Zoom-Level
+  
+  const [points, setPoints] = useState<L.LatLng[]>([]);
+  const [savedRoutes, setSavedRoutes] = useState<BikeRoute[]>([]);
+  const savedRoutesLayersRef = useRef<{[id: string]: L.Polyline}>({});
+  // Referenz für Routenpunkt-Marker
+  const routePointMarkersRef = useRef<L.Marker[]>([]);
+  const ADMIN_EMAIL = "pfistererfalk@gmail.com";
+  const [isAdminAccount, setIsAdminAccount] = useState(false);
+  // Status, ob der Benutzer auf einen bestehenden Routenpunkt geklickt hat
+  const [connectingFromExistingPoint, setConnectingFromExistingPoint] = useState(false);
+
+  // Speichert den vorherigen Wert von isDrawingMode
+  const prevDrawingModeRef = useRef<boolean>(isDrawingMode);
+  
+  // Neue Zustände für die Navigation
+  const [showNavigation, setShowNavigation] = useState(false);
+  const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
+  const [calculatedRouteInfo, setCalculatedRouteInfo] = useState<{
+    distance: number;
+    estimatedTime: number;
+    routeType: string;
+  } | undefined>(undefined);
+  const navigationRouteRef = useRef<L.Polyline | null>(null);
+  const navigationMarkersRef = useRef<L.Marker[]>([]);
+
+  // Füge State für die Fahrradständer hinzu
+  const [bikeStands, setBikeStands] = useState<BikeStand[]>([]);
+  const bikeStandMarkersRef = useRef<L.Marker[]>([]);
+  
+  // Neue State-Variablen für die verschiedenen POI-Typen
+  const [nextbikeStations, setNextbikeStations] = useState<NextbikeStation[]>([]);
+  const nextbikeMarkersRef = useRef<L.Marker[]>([]);
+  
+  const [repairStations, setRepairStations] = useState<RepairStation[]>([]);
+  const repairStationMarkersRef = useRef<L.Marker[]>([]);
+  
+  const [chargingStations, setChargingStations] = useState<ChargingStation[]>([]);
+  const chargingStationMarkersRef = useRef<L.Marker[]>([]);
+  
+  const [pois, setPois] = useState<POI[]>([]);
+  const poiMarkersRef = useRef<L.Marker[]>([]);
+  
+  // State für die Sichtbarkeit der Legende
+  const [showLegend, setShowLegend] = useState(true);
+
+  // Einfache Notification-Funktion für Feedback
+  const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    // Hier könnte später eine echte Benachrichtigung eingebunden werden
+    console.log(`[${type.toUpperCase()}] ${message}`);
+    // Wenn eine Alert-Komponente verfügbar ist, könnte sie hier aktiviert werden
+  };
+
+  // Löscht die aktuelle Route und setzt alles zurück
+  const clearRoute = React.useCallback(() => {
+    // Entferne alle Marker
+    markersRef.current.forEach(marker => marker.remove());
+    markersRef.current = [];
+
+    // Entferne die Polyline
+    if (polylineRef.current) {
+      polylineRef.current.remove();
+      polylineRef.current = null;
+    }
+
+    // Setze die Punkte zurück
+    setPoints([]);
+    
+    // Reset Verbindungs-Status
+    setConnectingFromExistingPoint(false);
+  }, []);
+
+  // Berechnet die Entfernung zwischen zwei Punkten in Kilometern
+  const calculateDistance = (p1: L.LatLng, p2: L.LatLng): number => {
+    const R = 6371; // Erdradius in km
+    const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+    const dLon = (p2.lng - p1.lng) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  // Überprüft, ob zwei Punkte innerhalb einer bestimmten Entfernung zueinander sind
+  const isWithinDistance = (p1: L.LatLng, p2: L.LatLng, maxDistanceKm: number): boolean => {
+    return calculateDistance(p1, p2) <= maxDistanceKm;
+  };
+
+  // Hilfsfunktion: Berechnet die Gesamtdistanz zwischen einer Liste von Punkten in Kilometern
+  const calculateTotalDistance = (points: L.LatLng[]): number => {
+    let distance = 0;
+    for (let i = 0; i < points.length - 1; i++) {
+      distance += calculateDistance(points[i], points[i + 1]);
+    }
+    return distance;
+  };
+
+  // Findet den nächsten Routenpunkt zu einem gegebenen Punkt
+  const findNearestRoutePoint = (point: L.LatLng): {
+    point: L.LatLng;
+    routeId: string;
+    index: number;
+    distance: number;
+  } | null => {
+    let nearestPoint = null;
+    let nearestDistance = Infinity;
+    let nearestRouteId = '';
+    let nearestIndex = -1;
+    
+    // Durchlaufe alle gespeicherten Routen und finde den nächsten Punkt
+    savedRoutes.forEach(route => {
+      if (!route.points || route.points.length === 0) return;
+      
+      route.points.forEach((routePoint, index) => {
+        // Erstelle einen L.LatLng für den Routenpunkt
+        const latLng = L.latLng(routePoint.lat, routePoint.lng);
+        const distance = calculateDistance(point, latLng);
+        
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestPoint = latLng;
+          nearestRouteId = route.id!;
+          nearestIndex = index;
+        }
+      });
+    });
+    
+    if (!nearestPoint) return null;
+    
+    return {
+      point: nearestPoint,
+      routeId: nearestRouteId,
+      index: nearestIndex,
+      distance: nearestDistance
+    };
+  };
+  
+  // Handler für Klick auf einen bestehenden Routenpunkt
+  const handleExistingPointClick = React.useCallback((point: L.LatLng) => {
+    console.log('Handling existing point click:', point);
+    
+    const map = mapRef.current;
+    if (!map) return;
+    
+    // Wenn wir bereits Punkte haben, behandle als Endpunkt
+    if (points.length > 0) {
+      console.log('Using existing point as endpoint because we already have points:', points.length);
+      
+      // Füge den genauen Punkt aus der bestehenden Route hinzu
+      const newPoints = [...points, point];
+      setPoints(newPoints);
+      
+      // Füge einen Marker für diesen Punkt hinzu
+      const marker = L.marker(point).addTo(map);
+      markersRef.current.push(marker);
+      
+      // Aktualisiere die Polyline
+      if (polylineRef.current) {
+        polylineRef.current.remove();
+      }
+      
+      const polyline = L.polyline(newPoints, {
+        color: 'blue',
+        weight: 4,
+        opacity: 0.7
+      }).addTo(map);
+      
+      polylineRef.current = polyline;
+      
+      // Wenn die Route mindestens 2 Punkte hat, kann sie abgeschlossen werden
+      if (onRouteComplete && newPoints.length >= 2) {
+        onRouteComplete(newPoints);
+        
+        // Bereinige die Karte nach dem Speichern der Route
+        clearRoute();
+      }
+    } else {
+      // Wenn wir noch keine Punkte haben, beginne eine neue Route von diesem Punkt
+      console.log('Starting new route from existing point');
+      
+      // Setze den Status, damit wir wissen, dass wir von einem bestehenden Punkt zeichnen
+      setConnectingFromExistingPoint(true);
+      
+      // Lösche vorherige Zeichnung falls vorhanden
+      clearRoute();
+      
+      // Starte neue Route mit diesem Punkt
+      setPoints([point]);
+      
+      // Füge einen Marker für diesen Punkt hinzu
+      const marker = L.marker(point).addTo(map);
+      markersRef.current.push(marker);
+    }
+  }, [clearRoute, points, onRouteComplete]);
+
+  // Handle map clicks
+  function handleMapClick(e: L.LeafletMouseEvent) {
+    if (!isDrawingMode) return;
+    
+    const map = mapRef.current;
+    if (!map) return;
+    
+    // Prüfe, ob der Klick von einem UI-Element (wie dem Speichern-Button) stammt
+    // Wenn das Event ein originalEvent enthält und dieses eine "button"-Eigenschaft hat,
+    // dann ist es höchstwahrscheinlich ein Klick auf ein UI-Element
+    const eventTarget = e.originalEvent?.target as HTMLElement;
+    if (eventTarget && (
+      eventTarget.tagName === 'BUTTON' || 
+      eventTarget.closest('button') || 
+      eventTarget.classList.contains('MuiFab-root') ||
+      eventTarget.closest('.MuiFab-root')
+    )) {
+      console.log('Klick auf Button erkannt, ignoriere für Routenpunkte');
+      return;
+    }
+    
+    const newPoint = e.latlng;
+    console.log('Map clicked at:', newPoint);
+    
+    // Überprüfe, ob in der Nähe eines bestehenden Routenpunkts geklickt wurde
+    const nearestPoint = findNearestRoutePoint(newPoint);
+    
+    // Wenn wir in der Nähe eines bestehenden Punkts geklickt haben (innerhalb von 50 Metern)
+    if (nearestPoint && nearestPoint.distance < 0.05) {
+      console.log('Clicked near existing point, distance:', nearestPoint.distance);
+      
+      // Die handleExistingPointClick-Funktion kümmert sich jetzt sowohl um Start- als auch Endpunkte
+      handleExistingPointClick(nearestPoint.point);
+      return;
+    }
+    
+    // Normal case: Add a new point
+    const newPoints = [...points, newPoint];
+    setPoints(newPoints);
+
+    // Remove existing polyline
+    if (polylineRef.current) {
+      polylineRef.current.remove();
+    }
+
+    // Draw new polyline
+    const polyline = L.polyline(newPoints, {
+      color: 'blue',
+      weight: 4,
+      opacity: 0.7
+    }).addTo(map);
+
+    polylineRef.current = polyline;
+
+    // Add marker for each point
+    const marker = L.marker(newPoint).addTo(map);
+    markersRef.current.push(marker);
+  }
+
+  // Hook to register and clean up click handler
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    
+    // Clean up previous click handler to avoid duplicates
+    map.off('click', handleMapClick);
+    
+    // Add click handler only when in drawing mode
+    if (isDrawingMode) {
+      map.on('click', handleMapClick);
+      console.log("Drawing mode activated - map click handler added");
+    }
+    
+    return () => {
+      map.off('click', handleMapClick);
+    };
+  }, [isDrawingMode, points, handleExistingPointClick]);
+
+  // Function called when drawing mode is deactivated
+  const handleDrawingComplete = React.useCallback(() => {
+    // Nur fortfahren, wenn wir mindestens 2 Punkte haben
+    if (points.length < 2) {
+      clearRoute();
+      return;
+    }
+
+    // Rufe die Callback-Funktion mit den Punkten auf
+    if (onRouteComplete) {
+      onRouteComplete([...points]);
+    }
+
+    // Räume auf nach dem Speichern
+    clearRoute();
+  }, [clearRoute, onRouteComplete, points]);
+
+  // Initialize map in the first useEffect
+  useEffect(() => {
+    // Überprüfen, ob ein Map-Element existiert und ob mapRef bereits eine Karte enthält
+    const mapContainer = document.getElementById('map');
+    if (mapContainer && !mapRef.current) {
+      console.log('Initialisiere Map');
+      
+      // Layer für die Karte
+      const openStreetMapLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      });
+
+      const cycleOsmLayer = L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://github.com/cyclosm/cyclosm-cartocss-style/releases">CyclOSM</a> contributors'
+      });
+
+      // Erstelle die Karte
+      const map = L.map('map', {
+        center: [51.1657, 10.4515], // Deutschland Zentrum
+        zoom: 6,
+        layers: [openStreetMapLayer],
+      });
+      
+      mapRef.current = map;
+      
+      // Speichere das initiale Zoom-Level
+      const initialZoom = map.getZoom();
+      setCurrentZoom(initialZoom);
+      console.log("Initial zoom level:", initialZoom);
+      
+      // Layer-Gruppen initialisieren
+      poiLayerGroupRef.current = L.layerGroup();
+      bikeStandLayerGroupRef.current = L.layerGroup();
+      repairStationLayerGroupRef.current = L.layerGroup();
+      chargingStationLayerGroupRef.current = L.layerGroup();
+      nextbikeLayerGroupRef.current = L.layerGroup();
+      
+      // Event-Handler für Zoom-Änderungen
+      map.on('zoomend', () => {
+        // Direktes Abrufen des aktuellen Zoom-Levels von der Leaflet-Karte
+        if (mapRef.current) {
+          const newZoom = mapRef.current.getZoom();
+          console.log("Zoom changed to:", newZoom);
+          
+          // State aktualisieren
+          setCurrentZoom(newZoom);
+          
+          // Layer-Sichtbarkeit aktualisieren
+          updateLayerVisibility(newZoom);
+        }
+      });
+      
+      // Initialisiere die Sichtbarkeit basierend auf dem Start-Zoom-Level
+      updateLayerVisibility(initialZoom);
+      
+      // Basiskarten-Optionen
+      const baseMaps = {
+        "Standard": openStreetMapLayer,
+        "Fahrrad": cycleOsmLayer
+      };
+      
+      // Layer-Control hinzufügen
+      L.control.layers(baseMaps).addTo(map);
+      
+      // Event-Handler für Klicks auf die Karte hinzufügen
+      map.on('click', handleMapClick);
+      
+      // Event-Handler für das Zeichnen von Routen einrichten
+      const drawControl = new L.Control.Draw({
+        draw: {
+          polyline: {
+            shapeOptions: {
+              color: '#3388ff',
+              weight: 6,
+              opacity: 0.7
+            }
+          },
+          polygon: false,
+          circle: false,
+          rectangle: false,
+          marker: false,
+          circlemarker: false
+        }
+      });
+      
+      map.addControl(drawControl);
+      
+      // Event-Handler für fertiggestellte Zeichnungen
+      map.on(L.Draw.Event.CREATED, handleDrawingComplete);
+      
+      // Event-Handler für ESC-Taste zum Abbrechen des Zeichnens
+      document.addEventListener('keydown', handleKeyPress);
+      
+      // Aufräumen beim Unmount der Komponente
+      return () => {
+        console.log('Cleaning up map...');
+        document.removeEventListener('keydown', handleKeyPress);
+        
+        if (mapRef.current) {
+          mapRef.current.off('click', handleMapClick);
+          mapRef.current.off('zoomend');
+          mapRef.current.off(L.Draw.Event.CREATED);
+          
+          // Alle Marker und Polylinien entfernen
+          routeMarkersRef.current.forEach(marker => marker.remove());
+          pointMarkersRef.current.forEach(marker => marker.remove());
+          navigationMarkersRef.current.forEach(marker => marker.remove());
+          bikeStandMarkersRef.current.forEach(marker => marker.remove());
+          poiMarkersRef.current.forEach(marker => marker.remove());
+          nextbikeMarkersRef.current.forEach(marker => marker.remove());
+          repairStationMarkersRef.current.forEach(marker => marker.remove());
+          chargingStationMarkersRef.current.forEach(marker => marker.remove());
+          
+          routeLinesRef.current.forEach(line => line.remove());
+          if (navigationLineRef.current) navigationLineRef.current.remove();
+          
+          // Layer-Gruppen entfernen
+          if (poiLayerGroupRef.current) mapRef.current.removeLayer(poiLayerGroupRef.current);
+          if (bikeStandLayerGroupRef.current) mapRef.current.removeLayer(bikeStandLayerGroupRef.current);
+          if (repairStationLayerGroupRef.current) mapRef.current.removeLayer(repairStationLayerGroupRef.current);
+          if (chargingStationLayerGroupRef.current) mapRef.current.removeLayer(chargingStationLayerGroupRef.current);
+          if (nextbikeLayerGroupRef.current) mapRef.current.removeLayer(nextbikeLayerGroupRef.current);
+          
+          // Karte entfernen
+          mapRef.current.remove();
+          mapRef.current = null;
+        }
+      };
+    }
+    
+    return undefined; // Wenn bereits eine Karte existiert, nichts tun
+  }, []);
+
+  // Überwache Änderungen des Drawing-Modus
+  useEffect(() => {
+    // Wenn der Zeichenmodus deaktiviert wurde und vorher aktiviert war
+    if (!isDrawingMode && prevDrawingModeRef.current) {
+      handleDrawingComplete();
+    }
+    
+    // Aktualisiere die Referenz auf den vorherigen Zustand
+    prevDrawingModeRef.current = isDrawingMode;
+  }, [isDrawingMode, handleDrawingComplete]);
+
+  // Hilfsfunktion zum Löschen aller Routen von der Karte
+  const clearAllRoutesFromMap = () => {
+    // Lösche Polylines
+    Object.values(savedRoutesLayersRef.current).forEach(layer => {
+      layer.remove();
+    });
+    savedRoutesLayersRef.current = {};
+    
+    // Lösche Routenpunkt-Marker
+    routePointMarkersRef.current.forEach(marker => {
+      marker.remove();
+    });
+    routePointMarkersRef.current = [];
+  };
+
+  // Lade die Routen des Benutzers
+  const fetchUserRoutes = async (userId: string) => {
+    try {
+      const routes = await getUserRoutes(userId);
+      setSavedRoutes(prevRoutes => [...prevRoutes, ...routes]);
+      displaySavedRoutes(routes);
+    } catch (error) {
+      console.error('Error fetching routes for map display:', error);
+    }
+  };
+
+  // Lade öffentliche/freigegebene Routen
+  const fetchPublicRoutes = async () => {
+    try {
+      const routes = await getAllApprovedRoutes();
+      setSavedRoutes(prevRoutes => {
+        // Vermeide Duplikate basierend auf route.id
+        const existingIds = new Set(prevRoutes.map(r => r.id));
+        const newRoutes = routes.filter(r => r.id && !existingIds.has(r.id));
+        return [...prevRoutes, ...newRoutes];
+      });
+      displaySavedRoutes(routes);
+    } catch (error) {
+      console.error('Error fetching public routes for map display:', error);
+    }
+  };
+
+  // Zeige gespeicherte Fahrradwege auf der Karte an
+  const displaySavedRoutes = (routes: BikeRoute[]) => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Füge jeden Fahrradweg als Polyline hinzu
+    routes.forEach((route) => {
+      if (route.points && route.points.length >= 2) {
+        const latlngs = route.points.map(point => 
+          new L.LatLng(point.lat, point.lng)
+        );
+        
+        // Bestimme eine konsistente Farbe basierend auf der Route-ID
+        const color = getRouteColor(route.id);
+        
+        // Nur eine Polyline hinzufügen, wenn es noch keine für diesen Fahrradweg gibt
+        if (!route.id || !savedRoutesLayersRef.current[route.id]) {
+          const polyline = L.polyline(latlngs, {
+            color,
+            weight: 4, // Dünnere Linie für normale Fahrradwege
+            opacity: 0.7
+          }).addTo(map);
+          
+          // Speichere den Layer mit der Route-ID
+          if (route.id) {
+            savedRoutesLayersRef.current[route.id] = polyline;
+          }
+          
+          // Erstelle ein erweitertes Popup mit Bewertung und Steigung
+          const ratingStars = route.rating ? '★'.repeat(Math.floor(route.rating)) + (route.rating % 1 ? '½' : '') : '';
+          
+          // HTML für das Popup mit verbesserten Informationen und Lösch-Button
+          const popupContent = `
+            <div style="min-width: 200px;">
+              <h3 style="margin: 0 0 10px 0; color: ${color};">${route.name || 'Unbenannter Fahrradweg'}</h3>
+              ${route.description ? `<p style="margin: 5px 0;">${route.description}</p>` : '<p style="margin: 5px 0; color: #888;">Keine Beschreibung</p>'}
+              <hr style="border: 0; border-top: 1px solid #eee; margin: 8px 0;">
+              <div style="display: flex; justify-content: space-between; font-size: 13px;">
+                <span><strong>Länge:</strong> ${calculateRouteLength(route.points).toFixed(2)} km</span>
+                <span><strong>Erstellt:</strong> ${route.createdAt.toLocaleDateString()}</span>
+              </div>
+              ${route.rating ? `
+                <div style="margin-top: 8px; font-size: 13px;">
+                  <strong>Bewertung:</strong> 
+                  <span style="color: orange; font-size: 14px;">${ratingStars}</span> 
+                  <span>(${route.rating})</span>
+                </div>` : ''}
+              ${route.slope ? `
+                <div style="margin-top: 5px; font-size: 13px;">
+                  <strong>Steigung:</strong> 
+                  <span style="padding: 2px 8px; border-radius: 10px; background-color: ${getSlopeColor(route.slope)}; color: white; font-size: 12px;">
+                    ${formatSlope(route.slope)}
+                  </span>
+                </div>` : ''}
+              ${route.userId === auth.currentUser?.uid ? `
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 8px 0;">
+                <div style="margin-top: 10px; text-align: center;">
+                  <button id="delete-route-${route.id}" style="background-color: #ff4d4f; color: white; border: none; border-radius: 4px; padding: 5px 12px; cursor: pointer; font-size: 12px;">
+                    Fahrradweg löschen
+                  </button>
+                </div>
+              ` : ''}
+            </div>
+          `;
+          
+          // Zeige Popup mit erweiterten Infos beim Klick an
+          polyline.bindPopup(popupContent);
+          
+          // Event-Handler zum Löschen eines Fahrradwegs hinzufügen
+          if (route.id && route.userId === auth.currentUser?.uid) {
+            polyline.on('popupopen', () => {
+              // Button erst dann suchen, wenn das Popup geöffnet wurde
+              setTimeout(() => {
+                const deleteButton = document.getElementById(`delete-route-${route.id}`);
+                if (deleteButton) {
+                  deleteButton.addEventListener('click', async () => {
+                    try {
+                      // Fahrradweg aus der Datenbank löschen
+                      await deleteRoute(route.id!);
+                      
+                      // Fahrradweg von der Karte entfernen
+                      if (savedRoutesLayersRef.current[route.id!]) {
+                        savedRoutesLayersRef.current[route.id!].remove();
+                        delete savedRoutesLayersRef.current[route.id!];
+                      }
+                      
+                      // Liste der gespeicherten Routen aktualisieren
+                      if (auth.currentUser) {
+                        fetchUserRoutes(auth.currentUser.uid);
+                      }
+                      
+                      // Popup schließen
+                      mapRef.current?.closePopup();
+                      
+                      // Erfolgsbenachrichtigung anzeigen
+                      showNotification('Fahrradweg wurde gelöscht', 'success');
+                    } catch (error) {
+                      console.error('Fehler beim Löschen des Fahrradwegs:', error);
+                      showNotification('Fehler beim Löschen des Fahrradwegs', 'error');
+                    }
+                  });
+                }
+              }, 100); // Kurze Verzögerung, um sicherzustellen, dass das DOM aktualisiert wurde
+            });
+          }
+          
+          // Füge für jeden Punkt der Route einen klickbaren Marker hinzu
+          latlngs.forEach((point, pointIndex) => {
+            // Nur den ersten und letzten Punkt oder alle 5 Punkte dazwischen
+            if (pointIndex === 0 || pointIndex === latlngs.length - 1 || pointIndex % 5 === 0) {
+              const marker = L.marker(point, { 
+                icon: RoutePointIcon,
+                opacity: 0.7
+              });
+              
+              // Zeige Tooltip an, wenn der Benutzer im Zeichenmodus ist
+              marker.bindTooltip("Klicke, um eine Route von hier zu starten", {
+                direction: 'top',
+                opacity: 0.8,
+                className: 'route-point-tooltip'
+              });
+              
+              // Füge Klick-Handler hinzu, wenn der Benutzer im Zeichenmodus ist
+              marker.on('click', (e) => {
+                if (isDrawingMode) {
+                  // Verhindere Standardverhalten (Propagation zur Karte)
+                  L.DomEvent.stopPropagation(e);
+                  
+                  // Setze diesen Punkt als ersten Punkt der neuen Route
+                  handleExistingPointClick(point);
+                } else {
+                  // Zeige verbessertes Info-Popup für nicht-Zeichenmodus
+                  const ratingStars = route.rating ? '★'.repeat(Math.floor(route.rating)) + (route.rating % 1 ? '½' : '') : '';
+                  const pointPopupContent = `
+                    <div style="min-width: 180px;">
+                      <h4 style="margin: 0 0 5px 0; color: ${getRouteColor(route.id)};">Routenpunkt von:</h4>
+                      <p style="margin: 0 0 8px 0; font-weight: bold;">${route.name || 'Unbenannte Route'}</p>
+                      ${route.rating ? `
+                        <div style="font-size: 12px; margin-bottom: 4px;">
+                          <strong>Bewertung:</strong> 
+                          <span style="color: orange; font-size: 13px;">${ratingStars}</span>
+                        </div>` : ''}
+                      ${route.slope ? `
+                        <div style="font-size: 12px;">
+                          <strong>Steigung:</strong> 
+                          <span style="padding: 1px 6px; border-radius: 10px; background-color: ${getSlopeColor(route.slope)}; color: white; font-size: 11px;">
+                            ${formatSlope(route.slope)}
+                          </span>
+                        </div>` : ''}
+                      <div style="margin-top: 8px; font-size: 11px; color: #666;">
+                        Zum Verbinden im Zeichenmodus anklicken
+                      </div>
+                    </div>
+                  `;
+                  marker.bindPopup(pointPopupContent).openPopup();
+                }
+              });
+              
+              // Marker nur zeigen, wenn Zeichenmodus aktiv ist
+              if (isDrawingMode) {
+                marker.addTo(map);
+                routePointMarkersRef.current.push(marker);
+              }
+            }
+          });
+        }
+      }
+    });
+  };
+
+  // Berechnet die Länge einer Route in Kilometern
+  const calculateRouteLength = (points: Array<{lat: number; lng: number}>): number => {
+    let length = 0;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      // Haversine-Formel zur Berechnung der Entfernung zwischen zwei Punkten
+      const R = 6371; // Erdradius in km
+      const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+      const dLon = (p2.lng - p1.lng) * Math.PI / 180;
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      length += R * c;
+    }
+    return length;
+  };
+
+  // Gibt die Farbe für die Steigung zurück
+  const getSlopeColor = (slope?: string | null): string => {
+    if (!slope) return "#888";
+    switch (slope) {
+      case "flach": return "#4caf50"; // Grün
+      case "leicht": return "#2196f3"; // Blau
+      case "mittel": return "#ff9800"; // Orange
+      case "steil": return "#f44336"; // Rot
+      case "varierend": return "#9c27b0"; // Lila
+      default: return "#888"; // Grau für unbekannt
+    }
+  };
+
+  // Überwacht Änderungen am isDrawingMode-Status
+  useEffect(() => {
+    // Wenn der Zeichenmodus von true auf false wechselt und wir Punkte haben, speichern wir die Route
+    if (prevDrawingModeRef.current && !isDrawingMode && points.length >= 2) {
+      console.log('Saving route via button click');
+      onRouteComplete?.(points);
+      clearRoute();
+    }
+    
+    // Zeige Routenpunkte nur im Zeichenmodus
+    if (isDrawingMode) {
+      displayRoutePoints();
+    } else {
+      // Entferne alle Routenpunkt-Marker
+      routePointMarkersRef.current.forEach(marker => {
+        marker.remove();
+      });
+      routePointMarkersRef.current = [];
+      
+      // Reset Verbindungs-Status
+      setConnectingFromExistingPoint(false);
+    }
+
+    // Aktualisiere den Referenzwert
+    prevDrawingModeRef.current = isDrawingMode;
+  }, [isDrawingMode, points, onRouteComplete]);
+
+  // Zeigt alle Routenpunkte an, von denen aus verbunden werden kann
+  const displayRoutePoints = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    
+    // Entferne alte Punkte
+    routePointMarkersRef.current.forEach(marker => {
+      marker.remove();
+    });
+    routePointMarkersRef.current = [];
+    
+    // Füge für jede Route die Verbindungspunkte hinzu
+    savedRoutes.forEach((route) => {
+      if (route.points && route.points.length >= 2) {
+        const latlngs = route.points.map(point => 
+          new L.LatLng(point.lat, point.lng)
+        );
+        
+        latlngs.forEach((point, pointIndex) => {
+          // Nur den ersten und letzten Punkt oder alle 5 Punkte dazwischen
+          if (pointIndex === 0 || pointIndex === latlngs.length - 1 || pointIndex % 5 === 0) {
+            const marker = L.marker(point, { 
+              icon: RoutePointIcon,
+              opacity: 0.7
+            });
+            
+            marker.bindTooltip("Klicke, um eine Route von hier zu starten", {
+              direction: 'top',
+              opacity: 0.8,
+              className: 'route-point-tooltip'
+            });
+            
+            marker.on('click', (e) => {
+              // Verhindere Standardverhalten (Propagation zur Karte)
+              L.DomEvent.stopPropagation(e);
+              
+              // Setze diesen Punkt als ersten Punkt der neuen Route
+              handleExistingPointClick(point);
+            });
+            
+            marker.addTo(map);
+            routePointMarkersRef.current.push(marker);
+          }
+        });
+      }
+    });
+  };
+
+  // Aktualisiere die Anzeige, wenn sich die gespeicherten Routen ändern
+  useEffect(() => {
+    // Wenn Zeichenmodus aktiv ist, zeige Routenpunkte
+    if (isDrawingMode) {
+      displayRoutePoints();
+    }
+  }, [savedRoutes, isDrawingMode]);
+
+  // Reagieren auf Änderungen des searchLocation-Props
+  useEffect(() => {
+    if (searchLocation && mapRef.current) {
+      // Auf die gesuchte Position zoomen
+      mapRef.current.setView(
+        [searchLocation.lat, searchLocation.lon], 
+        15,  // Zoom-Level auf 15 setzen (höherer Wert = nähere Ansicht)
+        { animate: true }
+      );
+      
+      // Optional: Marker für den gesuchten Ort setzen
+      const searchMarker = L.marker([searchLocation.lat, searchLocation.lon])
+        .addTo(mapRef.current)
+        .bindPopup(`<b>${searchLocation.display_name.split(',')[0]}</b>`)
+        .openPopup();
+      
+      // Nach 8 Sekunden den Marker automatisch entfernen
+      setTimeout(() => {
+        if (mapRef.current) {
+          searchMarker.remove();
+        }
+      }, 8000);
+    }
+  }, [searchLocation]);
+
+  // Aktualisiere die Karte, wenn sich der searchLocation-Prop ändert
+  useEffect(() => {
+    if (searchLocation && mapRef.current) {
+      try {
+        console.log(`Centering map to ${searchLocation.display_name} (${searchLocation.lat}, ${searchLocation.lon})`);
+        
+        // Erstelle einen neuen LatLng-Punkt
+        const newCenter = L.latLng(searchLocation.lat, searchLocation.lon);
+        
+        // Setze die Ansicht auf den neuen Mittelpunkt mit einem angemessenen Zoom-Level
+        mapRef.current.setView(newCenter, 15, {
+          animate: true,
+          duration: 1 // Sekunde
+        });
+        
+        // Optional: Füge einen temporären Marker hinzu, um den gesuchten Ort zu markieren
+        const searchMarker = L.marker(newCenter).addTo(mapRef.current);
+        searchMarker.bindPopup(searchLocation.display_name).openPopup();
+        
+        // Entferne den Marker nach 5 Sekunden
+        setTimeout(() => {
+          if (mapRef.current && mapRef.current.hasLayer(searchMarker)) {
+            mapRef.current.removeLayer(searchMarker);
+          }
+        }, 5000);
+      } catch (error) {
+        console.error("Error centering map:", error);
+      }
+    }
+  }, [searchLocation]);
+
+  // Entfernt alle Navigationsrouten und -marker von der Karte
+  const clearNavigationFromMap = () => {
+                  console.error('Fehler beim Löschen des Fahrradständers:', error);
+                  window.dispatchEvent(new CustomEvent('showNotification', { 
+                    detail: { 
+                      message: 'Fehler beim Löschen des Fahrradständers', 
+                      severity: 'error' 
+                    } 
+                  }));
+                }
+              }
+            });
+          }
+        });
+        
+        // Speichere den Marker für späteres Entfernen
+        bikeStandMarkersRef.current.push(marker);
+      });
+      
+      // Die Sichtbarkeit der Layer-Gruppe basierend auf dem aktuellen Zoom-Level aktualisieren
+      updateLayerVisibility(map.getZoom());
+      
+    } catch (error) {
+      console.error('Error fetching and displaying bike stands:', error);
+    }
+  }, [currentZoom]); // Abhängigkeit vom aktuellen Zoom-Level
+  
+  // Lade Fahrradständer beim Komponentenaufbau
+  useEffect(() => {
+    if (mapRef.current) {
+      fetchAndDisplayBikeStands();
+    }
+  }, [fetchAndDisplayBikeStands]);
+  
+  // Funktion zum Abrufen und Anzeigen von Nextbike-Stationen
+  const fetchAndDisplayNextbikeStations = useCallback(async () => {
+    try {
+      // Lösche bestehende Marker
+      nextbikeMarkersRef.current.forEach(marker => marker.remove());
+      nextbikeMarkersRef.current = [];
+      
+      // Lösche alle Marker aus der Layer-Gruppe
+      if (nextbikeLayerGroupRef.current) {
+        nextbikeLayerGroupRef.current.clearLayers();
+      }
+      
+      // Hole alle Nextbike-Stationen
+      const stations = await getAllNextbikeStations();
+      setNextbikeStations(stations);
+      
+      // Zeige die Stationen auf der Karte an
+      stations.forEach((station) => {
+        const position = L.latLng(station.position.lat, station.position.lng);
+        
+        // Erstelle ein benutzerdefiniertes Icon für die Nextbike-Station
+        const nextbikeIcon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `<div style="background-color: #4CAF50; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; display: flex; justify-content: center; align-items: center;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12" fill="white">
+                    <path d="M15.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM5 12c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5zm0 8.5c-1.9 0-3.5-1.6-3.5-3.5s1.6-3.5 3.5-3.5 3.5 1.6 3.5 3.5-1.6 3.5-3.5 3.5zm5.8-10l2.4-2.4.8.8c1.3 1.3 3 2.1 5.1 2.1V9c-1.5 0-2.7-.6-3.6-1.5l-1.9-1.9c-.5-.4-1-.6-1.6-.6s-1.1.2-1.4.6L7.8 8.4c-.4.4-.6.9-.6 1.4 0 .6.2 1.1.6 1.4L11 14v5h2v-6.2l-2.2-2.3zM19 12c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5zm0 8.5c-1.9 0-3.5-1.6-3.5-3.5s1.6-3.5 3.5-3.5 3.5 1.6 3.5 3.5-1.6 3.5-3.5 3.5z"/>
+                  </svg>
+                </div>`,
+          iconSize: [18, 18],
+          iconAnchor: [9, 9]
+        });
+        
+        // Erstelle den Marker und füge ihn zur Layer-Gruppe hinzu
+        const marker = L.marker(position, { icon: nextbikeIcon });
+        
+        if (nextbikeLayerGroupRef.current) {
+          marker.addTo(nextbikeLayerGroupRef.current);
+        }
+        
+        // Speichere den Marker für späteres Entfernen
+        nextbikeMarkersRef.current.push(marker);
+        
+        // ... existing code for popups ...
+      });
+      
+      // Die Sichtbarkeit der Layer-Gruppe basierend auf dem aktuellen Zoom-Level aktualisieren
+      updateLayerVisibility(map.getZoom());
+      
+    } catch (error) {
+      console.error('Error fetching and displaying nextbike stations:', error);
+    }
+  }, []);
+
+  // Funktion zum Abrufen und Anzeigen von Reparaturstationen
+  const fetchAndDisplayRepairStations = useCallback(async () => {
+    try {
+      // Lösche bestehende Marker
+      repairStationMarkersRef.current.forEach(marker => marker.remove());
+      repairStationMarkersRef.current = [];
+      
+      // Lösche alle Marker aus der Layer-Gruppe
+      if (repairStationLayerGroupRef.current) {
+        repairStationLayerGroupRef.current.clearLayers();
+      }
+      
+      // Hole alle Reparaturstationen
+      const stations = await getAllRepairStations();
+      setRepairStations(stations);
+      
+      // Zeige die Stationen auf der Karte an
+      stations.forEach((station) => {
+        const position = L.latLng(station.position.lat, station.position.lng);
+        
+        // Erstelle ein benutzerdefiniertes Icon für die Reparaturstation
+        const repairIcon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `<div style="background-color: #FF9800; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; display: flex; justify-content: center; align-items: center;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12" fill="white">
+                    <path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/>
+                  </svg>
+                </div>`,
+          iconSize: [18, 18],
+          iconAnchor: [9, 9]
+        });
+        
+        // Erstelle den Marker und füge ihn zur Layer-Gruppe hinzu
+        const marker = L.marker(position, { icon: repairIcon });
+        
+        if (repairStationLayerGroupRef.current) {
+          marker.addTo(repairStationLayerGroupRef.current);
+        }
+        
+        // Speichere den Marker für späteres Entfernen
+        repairStationMarkersRef.current.push(marker);
+        
+        // ... existing code for popups ...
+      });
+      
+      // Die Sichtbarkeit der Layer-Gruppe basierend auf dem aktuellen Zoom-Level aktualisieren
+      updateLayerVisibility(map.getZoom());
+      
+    } catch (error) {
+      console.error('Error fetching and displaying repair stations:', error);
+    }
+  }, []);
+
+  // Funktion zum Abrufen und Anzeigen von Ladestationen
+  const fetchAndDisplayChargingStations = useCallback(async () => {
+    try {
+      // Lösche bestehende Marker
+      chargingStationMarkersRef.current.forEach(marker => marker.remove());
+      chargingStationMarkersRef.current = [];
+      
+      // Lösche alle Marker aus der Layer-Gruppe
+      if (chargingStationLayerGroupRef.current) {
+        chargingStationLayerGroupRef.current.clearLayers();
+      }
+      
+      // Hole alle Ladestationen
+      const stations = await getAllChargingStations();
+      setChargingStations(stations);
+      
+      // Zeige die Stationen auf der Karte an
+      stations.forEach((station) => {
+        const position = L.latLng(station.position.lat, station.position.lng);
+        
+        // Erstelle ein benutzerdefiniertes Icon für die Ladestation
+        const chargingIcon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `<div style="background-color: #2196F3; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; display: flex; justify-content: center; align-items: center;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12" fill="white">
+                    <path d="M14.5 10.5h2v3h-2zM7.5 10.5h2v3h-2zM22 4h-4V2h-2v2h-8V2H6v2H2v18h20V4zm-2 16H4V8h16v12z"/>
+                  </svg>
+                </div>`,
+          iconSize: [18, 18],
+          iconAnchor: [9, 9]
+        });
+        
+        // Erstelle den Marker und füge ihn zur Layer-Gruppe hinzu
+        const marker = L.marker(position, { icon: chargingIcon });
+        
+        if (chargingStationLayerGroupRef.current) {
+          marker.addTo(chargingStationLayerGroupRef.current);
+        }
+        
+        // Speichere den Marker für späteres Entfernen
+        chargingStationMarkersRef.current.push(marker);
+        
+        // ... existing code for popups ...
+      });
+      
+      // Die Sichtbarkeit der Layer-Gruppe basierend auf dem aktuellen Zoom-Level aktualisieren
+      updateLayerVisibility(map.getZoom());
+      
+    } catch (error) {
+      console.error('Error fetching and displaying charging stations:', error);
+    }
+  }, []);
+
+  // Neue Funktion zur Aktualisierung der Layer-Sichtbarkeit
+  const updateLayerVisibility = (zoomLevel: number) => {
+    console.log("Updating layer visibility for zoom level:", zoomLevel);
+    
+    // Sicherstellen, dass die Karte existiert
+    const map = mapRef.current;
+    if (!map) {
+      console.log("Map not initialized yet, skipping layer visibility update");
+      return;
+    }
+    
+    // POI Layer-Gruppe
+    if (poiLayerGroupRef.current) {
+      try {
+        if (zoomLevel >= MIN_ZOOM_LEVEL_POIS) {
+          // Nur hinzufügen, wenn der Layer noch nicht auf der Karte ist
+          if (!map.hasLayer(poiLayerGroupRef.current)) {
+            poiLayerGroupRef.current.addTo(map);
+            console.log("POI layer added");
+          }
+        } else {
+          // Nur entfernen, wenn der Layer auf der Karte ist
+          if (map.hasLayer(poiLayerGroupRef.current)) {
+            map.removeLayer(poiLayerGroupRef.current);
+            console.log("POI layer removed");
+          }
+        }
+      } catch (error) {
+        console.error("Error updating POI layer visibility:", error);
+      }
+    }
+    
+    // Fahrradständer Layer-Gruppe
+    if (bikeStandLayerGroupRef.current) {
+      try {
+        if (zoomLevel >= MIN_ZOOM_LEVEL_BIKE_STANDS) {
+          if (!map.hasLayer(bikeStandLayerGroupRef.current)) {
+            bikeStandLayerGroupRef.current.addTo(map);
+            console.log("Bike stand layer added");
+          }
+        } else {
+          if (map.hasLayer(bikeStandLayerGroupRef.current)) {
+            map.removeLayer(bikeStandLayerGroupRef.current);
+            console.log("Bike stand layer removed");
+          }
+        }
+      } catch (error) {
+        console.error("Error updating bike stand layer visibility:", error);
+      }
+    }
+    
+    // Reparaturstation Layer-Gruppe
+    if (repairStationLayerGroupRef.current) {
+      try {
+        if (zoomLevel >= MIN_ZOOM_LEVEL_REPAIR_STATIONS) {
+          if (!map.hasLayer(repairStationLayerGroupRef.current)) {
+            repairStationLayerGroupRef.current.addTo(map);
+            console.log("Repair station layer added");
+          }
+        } else {
+          if (map.hasLayer(repairStationLayerGroupRef.current)) {
+            map.removeLayer(repairStationLayerGroupRef.current);
+            console.log("Repair station layer removed");
+          }
+        }
+      } catch (error) {
+        console.error("Error updating repair station layer visibility:", error);
+      }
+    }
+    
+    // Ladestation Layer-Gruppe
+    if (chargingStationLayerGroupRef.current) {
+      try {
+        if (zoomLevel >= MIN_ZOOM_LEVEL_CHARGING_STATIONS) {
+          if (!map.hasLayer(chargingStationLayerGroupRef.current)) {
+            chargingStationLayerGroupRef.current.addTo(map);
+            console.log("Charging station layer added");
+          }
+        } else {
+          if (map.hasLayer(chargingStationLayerGroupRef.current)) {
+            map.removeLayer(chargingStationLayerGroupRef.current);
+            console.log("Charging station layer removed");
+          }
+        }
+      } catch (error) {
+        console.error("Error updating charging station layer visibility:", error);
+      }
+    }
+    
+    // Nextbike Layer-Gruppe
+    if (nextbikeLayerGroupRef.current) {
+      try {
+        if (zoomLevel >= MIN_ZOOM_LEVEL_NEXTBIKE) {
+          if (!map.hasLayer(nextbikeLayerGroupRef.current)) {
+            nextbikeLayerGroupRef.current.addTo(map);
+            console.log("Nextbike layer added");
+          }
+        } else {
+          if (map.hasLayer(nextbikeLayerGroupRef.current)) {
+            map.removeLayer(nextbikeLayerGroupRef.current);
+            console.log("Nextbike layer removed");
+          }
+        }
+      } catch (error) {
+        console.error("Error updating nextbike layer visibility:", error);
+      }
+    }
+  };
+
+  // Modifiziere die fetchAndDisplayPOIs-Funktion
+  const fetchAndDisplayPOIs = useCallback(async () => {
+    try {
+      // Prüfen, ob die Karte initialisiert ist
+      const map = mapRef.current;
+      if (!map) {
+        console.log("Map not initialized yet, skipping POI display");
+        return;
+      }
+      
+      // Lösche bestehende POI-Marker
+      poiMarkersRef.current.forEach(marker => marker.remove());
+      poiMarkersRef.current = [];
+      
+      // Lösche alle Marker aus der Layer-Gruppe
+      if (poiLayerGroupRef.current) {
+        poiLayerGroupRef.current.clearLayers();
+      } else {
+        // Erstelle die Layer-Gruppe, falls sie noch nicht existiert
+        poiLayerGroupRef.current = L.layerGroup();
+      }
+      
+      // Hole alle POIs
+      const pois = await getAllPois();
+      setPois(pois);
+      
+      // Zeige die POIs auf der Karte an
+      pois.forEach((poi) => {
+        // Custom Icon für den POI
+        const poiIcon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `<div style="background-color: #fff; border-radius: 50%; padding: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="#f44336">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                  </svg>
+                </div>`,
+          iconSize: [18, 18],
+          iconAnchor: [9, 9]
+        });
+        
+        const position = L.latLng(poi.position.lat, poi.position.lng);
+        
+        // Erstelle den Marker mit dem benutzerdefinierten Icon
+        // und füge ihn zur Layer-Gruppe hinzu, nicht direkt zur Karte
+        const marker = L.marker(position, { icon: poiIcon });
+        
+        if (poiLayerGroupRef.current) {
+          marker.addTo(poiLayerGroupRef.current);
+        }
+        
+        // Popup-Inhalt erstellen...
+        // ... existing code for popups ...
+        
+        // Speichere den Marker für späteres Entfernen
+        poiMarkersRef.current.push(marker);
+      });
+      
+      // Die Sichtbarkeit der Layer-Gruppe basierend auf dem aktuellen Zoom-Level aktualisieren
+      updateLayerVisibility(map.getZoom());
+      
+    } catch (error) {
+      console.error('Error fetching and displaying POIs:', error);
+    }
+  }, []);
+
+  // Funktion zum Abrufen und Anzeigen aller POI-Typen
+  const fetchAndDisplayAllPOIs = useCallback(async () => {
+    console.log("Fetching and displaying all POI types");
+    
+    // Prüfen, ob die Karte initialisiert ist
+    if (!mapRef.current) {
+      console.log("Map not initialized yet, skipping POI loading");
+      // Wir planen einen erneuten Versuch, wenn die Karte initialisiert ist
+      const checkInterval = setInterval(() => {
+        if (mapRef.current) {
+          clearInterval(checkInterval);
+          fetchAndDisplayAllPOIs();
+        }
+      }, 1000); // Überprüfe alle Sekunde
+      
+      // Nach 10 Sekunden abbrechen, um endlose Schleifen zu vermeiden
+      setTimeout(() => clearInterval(checkInterval), 10000);
+      return;
+    }
+    
+    try {
+      // Lade alle POI-Typen nacheinander
+      await fetchAndDisplayPOIs();
+      await fetchAndDisplayBikeStands();
+      await fetchAndDisplayNextbikeStations();
+      await fetchAndDisplayRepairStations();
+      await fetchAndDisplayChargingStations();
+      
+      // Aktualisiere die Sichtbarkeit basierend auf dem aktuellen Zoom-Level
+      const currentZoomLevel = mapRef.current.getZoom();
+      console.log("Initial POI visibility set for zoom level:", currentZoomLevel);
+      updateLayerVisibility(currentZoomLevel);
+    } catch (error) {
+      console.error("Error loading POIs:", error);
+    }
+  }, [fetchAndDisplayPOIs, fetchAndDisplayBikeStands, fetchAndDisplayNextbikeStations, 
+      fetchAndDisplayRepairStations, fetchAndDisplayChargingStations]);
+
+  // Expose methods for parent component
+  useImperativeHandle(ref, () => ({
+    refreshRoutes: async () => {
+      if (mapRef.current) {
+        const userId = auth.currentUser?.uid;
+        if (userId) {
+          await fetchUserRoutes(userId);
+        }
+        await fetchPublicRoutes();
+      }
+    },
+    refreshBikeStands: async () => {
+      if (mapRef.current) {
+        await fetchAndDisplayBikeStands();
+      }
+    },
+    refreshPOIs: async () => {
+      if (mapRef.current) {
+        await fetchAndDisplayAllPOIs();
+      }
+    }
+  }));
+
+  // Neuer Handler für Klicks im Nextbike-Modus
+  const handleNextbikeClick = (e: L.LeafletMouseEvent) => {
+    if (!isNextBikeMode) return;
+    
+    console.log('Adding nextbike station at:', e.latlng);
+    if (onAddPOI) {
+      onAddPOI(e.latlng, 'nextBike');
+    }
+  };
+
+  // Neuer Handler für Klicks im Reparaturstations-Modus
+  const handleRepairStationClick = (e: L.LeafletMouseEvent) => {
+    if (!isRepairStationMode) return;
+    
+    console.log('Adding repair station at:', e.latlng);
+    if (onAddPOI) {
+      onAddPOI(e.latlng, 'repairStation');
+    }
+  };
+
+  // Neuer Handler für Klicks im Ladestations-Modus
+  const handleChargingStationClick = (e: L.LeafletMouseEvent) => {
+    if (!isChargingStationMode) return;
+    
+    console.log('Adding charging station at:', e.latlng);
+    if (onAddPOI) {
+      onAddPOI(e.latlng, 'chargingStation');
+    }
+  };
+
+  // Neuer Handler für Klicks im POI-Modus
+  const handlePoiClick = (e: L.LeafletMouseEvent) => {
+    if (!isPoiMode) return;
+    
+    console.log('Adding POI at:', e.latlng);
+    if (onAddPOI) {
+      onAddPOI(e.latlng, 'poi');
+    }
+  };
+
+  // Füge useEffect für die verschiedenen POI-Modi hinzu
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    
+    // Clean up previous click handlers to avoid duplicates
+    map.off('click', handleNextbikeClick);
+    map.off('click', handleRepairStationClick);
+    map.off('click', handleChargingStationClick);
+    map.off('click', handlePoiClick);
+    
+    // Add click handlers only when in the respective mode
+    if (isNextBikeMode) {
+      map.on('click', handleNextbikeClick);
+      console.log("Nextbike mode activated - map click handler added");
+    } else if (isRepairStationMode) {
+      map.on('click', handleRepairStationClick);
+      console.log("Repair station mode activated - map click handler added");
+    } else if (isChargingStationMode) {
+      map.on('click', handleChargingStationClick);
+      console.log("Charging station mode activated - map click handler added");
+    } else if (isPoiMode) {
+      map.on('click', handlePoiClick);
+      console.log("POI mode activated - map click handler added");
+    }
+    
+    return () => {
+      map.off('click', handleNextbikeClick);
+      map.off('click', handleRepairStationClick);
+      map.off('click', handleChargingStationClick);
+      map.off('click', handlePoiClick);
+    };
+  }, [isNextBikeMode, isRepairStationMode, isChargingStationMode, isPoiMode]);
+
+  // Lade alle POIs beim Komponentenaufbau
+  useEffect(() => {
+    if (mapRef.current) {
+      // Lade alle POI-Typen
+      fetchAndDisplayPOIs();
+      fetchAndDisplayBikeStands();
+      fetchAndDisplayNextbikeStations();
+      fetchAndDisplayRepairStations();
+      fetchAndDisplayChargingStations();
+      
+      // Aktualisiere die Sichtbarkeit basierend auf dem aktuellen Zoom-Level
+      if (mapRef.current) {
+        const currentZoomLevel = mapRef.current.getZoom();
+        console.log("Initial POI visibility set for zoom level:", currentZoomLevel);
+        updateLayerVisibility(currentZoomLevel);
+      }
+    }
+  }, [fetchAndDisplayPOIs, fetchAndDisplayBikeStands, fetchAndDisplayNextbikeStations, 
+      fetchAndDisplayRepairStations, fetchAndDisplayChargingStations]);
+
+  const [routeFound, setRouteFound] = useState(false);
+  const [routeDistance, setRouteDistance] = useState(0);
+  const [routeDuration, setRouteDuration] = useState(0);
+  
+  // States für das Speichern von Navigationsrouten
+  const [saveNavRouteDialogOpen, setSaveNavRouteDialogOpen] = useState(false);
+  const [navRouteName, setNavRouteName] = useState("Meine Navigationsroute");
+  const [navRouteDescription, setNavRouteDescription] = useState("");
+
+  // Neuer Handler für das Speichern einer Navigationsroute
+  const handleSaveNavigationRoute = async () => {
+    // Prüfen, ob der Benutzer eingeloggt ist
+    if (!auth.currentUser) {
+      console.error('Benutzer ist nicht eingeloggt.');
+      setSnackbarMessage('Du musst eingeloggt sein, um eine Route zu speichern');
+      setSnackbarSeverity('warning');
+      setSnackbarOpen(true);
+      return;
+    }
+    
+    // Prüfen, ob eine Route berechnet wurde
+    if (!routeFound) {
+      console.error('Keine Route zum Speichern gefunden.');
+      setSnackbarMessage('Es wurde keine Route gefunden, die gespeichert werden kann');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+      return;
+    }
+    
+    try {
+      // Die aktuelle Route aus den berechneten Punkten extrahieren
+      // Wenn wir routePoints haben (gespeichert während der Routenberechnung), nutzen wir diese
+      const routePointsArray = currentRoutePoints.current || [];
+      
+      if (routePointsArray.length < 2) {
+        console.error('Nicht genügend Punkte für eine gültige Route');
+        setSnackbarMessage('Die Route enthält zu wenige Punkte');
+        setSnackbarSeverity('error');
+        setSnackbarOpen(true);
+        return;
+      }
+      
+      // Konvertiere LatLng-Objekte in einfache { lat, lng } Objekte
+      const routePoints = routePointsArray.map(point => ({
+        lat: point.lat,
+        lng: point.lng
+      }));
+      
+      // Speichere die Navigationsroute in Firebase
+      const routeId = await saveNavigationRoute(
+        auth.currentUser.uid,
+        routePoints,
+        navRouteName,
+        navRouteDescription
+      );
+      
+      console.log('Navigationsroute erfolgreich gespeichert:', routeId);
+      
+      // Löse ein benutzerdefiniertes Event aus, um die Sidebar zu aktualisieren
+      const event = new CustomEvent('navigationRouteSaved', {
+        detail: { userId: auth.currentUser.uid }
+      });
+      window.dispatchEvent(event);
+      
+      // Feedback und Dialog schließen
+      setSnackbarMessage('Route erfolgreich gespeichert!');
+      setSnackbarSeverity('success');
+      setSnackbarOpen(true);
+      setSaveNavRouteDialogOpen(false);
+      
+      // Optional: Setze die Felder zurück
+      setNavRouteName("Meine Navigationsroute");
+      setNavRouteDescription("");
+    } catch (error) {
+      console.error('Fehler beim Speichern der Navigationsroute:', error);
+      setSnackbarMessage('Fehler beim Speichern der Route.');
+      setSnackbarSeverity('error');
+      setSnackbarOpen(true);
+    }
+  };
+  
+  // States für Snackbar-Benachrichtigungen
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error' | 'warning' | 'info'>('success');
+
+  // State und Refs für die Navigation
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [navigationStartPoint, setNavigationStartPoint] = useState<L.LatLng | null>(null);
+  const [navigationEndPoint, setNavigationEndPoint] = useState<L.LatLng | null>(null);
+  const navigationRouteLayer = useRef<L.LayerGroup | null>(null);
+  const routePointMarkers = useRef<L.Marker[]>([]);
+  const currentRoutePoints = useRef<L.LatLng[]>([]);
+
+  // Referenz für die Sichtbarkeit von Navigationsrouten
+  const navRouteVisibilityRef = useRef<{[key: string]: boolean}>({});
+
+  // Zustand für aktuell angezeigte Navigationsroute
+  const [visibleNavRoute, setVisibleNavRoute] = useState<{
+    id: string;
+    points: {lat: number; lng: number}[];
+    name: string;
+  } | null>(null);
+
+  // Layer für die aktuell angezeigte Navigationsroute
+  const navRouteLayerRef = useRef<L.Polyline | null>(null);
+  
+  // Event-Listener für das Anzeigen/Ausblenden von Navigationsrouten
+  useEffect(() => {
+    // Event-Handler für das Anzeigen einer Navigationsroute
+    const handleShowNavRoute = (event: any) => {
+      const { routeId, points, name } = event.detail;
+      console.log('Zeige Navigationsroute an:', routeId);
+      
+      // Speichere, dass diese Navigationsroute sichtbar sein soll
+      navRouteVisibilityRef.current[routeId] = true;
+      
+      // Aktiviere die Anzeige der Route
+      setVisibleNavRoute({ id: routeId, points, name });
+    };
+
+    // Event-Handler für das Ausblenden einer Navigationsroute
+    const handleHideNavRoute = (event: any) => {
+      const routeId = event.detail?.routeId;
+      console.log('Verstecke Navigationsroute:', routeId);
+      
+      // 1. navRouteLayer entfernen (für die speziell angezeigte Navigationsroute)
+      if (navRouteLayerRef.current) {
+        navRouteLayerRef.current.remove();
+        navRouteLayerRef.current = null;
+      }
+      
+      // 2. Wenn die Route auch als normaler Fahrradweg angezeigt wird, verstecken wir sie
+      if (routeId && savedRoutesLayersRef.current[routeId]) {
+        // Wir speichern die Sichtbarkeit, um sie später wiederherstellen zu können
+        navRouteVisibilityRef.current[routeId] = false;
+        
+        // Entferne die Route von der Karte, behalte aber die Referenz
+        const routeLayer = savedRoutesLayersRef.current[routeId];
+        if (routeLayer && mapRef.current) {
+          routeLayer.remove();
+        }
+      }
+      
+      setVisibleNavRoute(null);
+    };
+
+    // Event-Listener registrieren
+    window.addEventListener('showNavRoute', handleShowNavRoute);
+    window.addEventListener('hideNavRoute', handleHideNavRoute);
+
+    // Event-Listener beim Aufräumen entfernen
+    return () => {
+      window.removeEventListener('showNavRoute', handleShowNavRoute);
+      window.removeEventListener('hideNavRoute', handleHideNavRoute);
+    };
+  }, []);
+
+  // Navigationsroute auf der Karte anzeigen oder ausblenden
+  useEffect(() => {
+    if (!mapRef.current) return;
+    
+    // Bestehende Route entfernen
+    if (navRouteLayerRef.current) {
+      navRouteLayerRef.current.remove();
+      navRouteLayerRef.current = null;
+    }
+    
+    // Wenn eine Route angezeigt werden soll, sie zeichnen
+    if (visibleNavRoute && visibleNavRoute.points && visibleNavRoute.points.length > 0) {
+      console.log('Zeichne Navigationsroute auf der Karte:', visibleNavRoute.id);
+      
+      const points = visibleNavRoute.points.map(point => [point.lat, point.lng] as [number, number]);
+      
+      // Route mit oranger Farbe zeichnen (wie berechnete Navigationsrouten)
+      navRouteLayerRef.current = L.polyline(points, {
+        color: '#FF9800', // Orange
+        weight: 5,
+        opacity: 0.7
+      }).addTo(mapRef.current);
+      
+      // Popup mit dem Namen der Route
+      if (visibleNavRoute.name) {
+        navRouteLayerRef.current.bindPopup(`<b>${visibleNavRoute.name}</b>`);
+      }
+      
+      // Karte auf die Route zentrieren
+      mapRef.current.fitBounds(navRouteLayerRef.current.getBounds());
+    } else {
+      console.log('Keine Navigationsroute zum Anzeigen');
+    }
+  }, [visibleNavRoute]);
+
+  // useEffect zur Initialisierung der Karte
+  useEffect(() => {
+    // Prüfen, ob der Map-Container existiert und ob bereits eine Karte initialisiert wurde
+    if (document.getElementById('map') && !mapRef.current) {
+      console.log('Initialisiere neue Karte');
+      
+      // Layer für die Karte
+      const openStreetMapLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      });
+
+      const cycleOsmLayer = L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://github.com/cyclosm/cyclosm-cartocss-style/releases">CyclOSM</a> contributors'
+      });
+
+      // Erstelle die Karte
+      const map = L.map('map', {
+        center: [51.1657, 10.4515], // Deutschland Zentrum
+        zoom: 6,
+        layers: [openStreetMapLayer],
+      });
+      
+      mapRef.current = map;
+      
+      // Speichere das initiale Zoom-Level
+      const initialZoom = map.getZoom();
+      setCurrentZoom(initialZoom);
+      console.log("Initial zoom level:", initialZoom);
+      
+      // Layer-Gruppen initialisieren
+      poiLayerGroupRef.current = L.layerGroup();
+      bikeStandLayerGroupRef.current = L.layerGroup();
+      repairStationLayerGroupRef.current = L.layerGroup();
+      chargingStationLayerGroupRef.current = L.layerGroup();
+      nextbikeLayerGroupRef.current = L.layerGroup();
+      
+      // Event-Handler für Zoom-Änderungen
+      map.on('zoomend', () => {
+        // Direktes Abrufen des aktuellen Zoom-Levels von der Leaflet-Karte
+        const newZoom = map.getZoom();
+        console.log("Zoom changed to:", newZoom);
+        
+        // State aktualisieren
+        setCurrentZoom(newZoom);
+        
+        // Layer-Sichtbarkeit aktualisieren
+        updateLayerVisibility(newZoom);
+      });
+      
+      // Initialisiere die Sichtbarkeit basierend auf dem Start-Zoom-Level
+      updateLayerVisibility(initialZoom);
+      
+      // Basiskarten-Optionen
+      const baseMaps = {
+        "Standard": openStreetMapLayer,
+        "Fahrrad": cycleOsmLayer
+      };
+      
+      // Layer-Control hinzufügen
+      L.control.layers(baseMaps).addTo(map);
+      
+      // Event-Handler für Klicks auf die Karte
+      map.on('click', handleMapClick);
+      
+      // Aufräumen beim Unmount der Komponente
+      return () => {
+        console.log('Cleaning up map...');
+        
+        // Event-Listener entfernen
+        if (mapRef.current) {
+          mapRef.current.off('click', handleMapClick);
+          mapRef.current.off('zoomend');
+          
+          // Alle Marker und Layer entfernen
+          if (poiLayerGroupRef.current) poiLayerGroupRef.current.clearLayers();
+          if (bikeStandLayerGroupRef.current) bikeStandLayerGroupRef.current.clearLayers();
+          if (repairStationLayerGroupRef.current) repairStationLayerGroupRef.current.clearLayers();
+          if (chargingStationLayerGroupRef.current) chargingStationLayerGroupRef.current.clearLayers();
+          if (nextbikeLayerGroupRef.current) nextbikeLayerGroupRef.current.clearLayers();
+          
+          // Karte entfernen
+          mapRef.current.remove();
+          mapRef.current = null;
+        }
+      };
+    }
+  }, []);
+
+  return (
+    <Box
+      id="map"
+      sx={{
+        flex: 1,
+        height: '100%',
+        width: '100%',
+        position: 'relative',
+        '& .leaflet-container': {
+          height: '100%',
+          width: '100%',
+        },
+        '& .route-point-tooltip': {
+          backgroundColor: '#2196f3',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          padding: '4px 8px',
+          fontSize: '12px'
+        },
+        // CSS für Fahrradständer Icons
+        '& .bike-stand-icon': {
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+        // CSS für Nextbike Icons
+        '& .nextbike-icon': {
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+        // CSS für Reparaturstations Icons
+        '& .repair-icon': {
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+        // CSS für Ladestations Icons
+        '& .charging-icon': {
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+        // CSS für POI Icons
+        '& .poi-icon': {
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }
+      }}
+    >
+      {/* Navigations-Button */}
+      {!isDrawingMode && (
+        <Fab 
+          color="primary" 
+          aria-label="navigation"
+          onClick={toggleNavigation}
+          sx={{ 
+            position: 'absolute', 
+            bottom: 20, 
+            right: 20, 
+            zIndex: 1000 
+          }}
+        >
+          <DirectionsIcon />
+        </Fab>
+      )}
+      
+      {/* Speichern- und Abbrechen-Buttons für den Zeichenmodus */}
+      {isDrawingMode && points.length >= 2 && (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 20,
+            right: 20,
+            zIndex: 1000,
+            display: 'flex',
+            gap: 2
+          }}
+        >
+          <Tooltip title="Fahrradweg speichern">
+            <Fab
+              color="success"
+              aria-label="save"
+              onClick={(e) => {
+                // Verhindert, dass der Klick an die Karte weitergeleitet wird
+                e.stopPropagation();
+                if (onRouteComplete) {
+                  onRouteComplete([...points]);
+                }
+                clearRoute();
+              }}
+            >
+              <SaveIcon />
+            </Fab>
+          </Tooltip>
+          <Tooltip title="Zeichnung abbrechen">
+            <Fab
+              color="error"
+              aria-label="cancel"
+              onClick={(e) => {
+                // Verhindert, dass der Klick an die Karte weitergeleitet wird
+                e.stopPropagation();
+                clearRoute();
+              }}
+            >
+              <CancelIcon />
+            </Fab>
+          </Tooltip>
+        </Box>
+      )}
+      
+      {/* Navigationskomponente */}
+      {showNavigation && (
+        <Navigation 
+          routes={savedRoutes}
+          mapRef={mapRef}
+          onCalculateRoute={calculateRoute}
+          onClose={toggleNavigation}
+          isCalculating={isCalculatingRoute}
+          calculatedRouteInfo={calculatedRouteInfo}
+          routeFound={routeFound}
+          onSaveRoute={() => setSaveNavRouteDialogOpen(true)}
+        />
+      )}
+      
+      {/* Kartenlegende */}
+      {showLegend && (
+        <MapLegend 
+          showRoutes={true}
+          showBikeStands={true}
+          showNextbike={nextbikeStations.length > 0}
+          showRepairStations={repairStations.length > 0}
+          showChargingStations={chargingStations.length > 0}
+          showPois={pois.length > 0}
+        />
+      )}
+
+      {/* Dialog zum Speichern einer Navigationsroute */}
+      <Dialog
+        open={saveNavRouteDialogOpen}
+        onClose={() => setSaveNavRouteDialogOpen(false)}
+      >
+        <DialogTitle>Navigationsroute speichern</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Möchtest du diese berechnete Route für später speichern? Sie wird in deiner "Meine Routen"-Übersicht erscheinen.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Routenname"
+            type="text"
+            fullWidth
+            variant="standard"
+            value={navRouteName}
+            onChange={(e) => setNavRouteName(e.target.value)}
+          />
+          <TextField
+            margin="dense"
+            label="Beschreibung (optional)"
+            type="text"
+            fullWidth
+            multiline
+            rows={3}
+            variant="standard"
+            value={navRouteDescription}
+            onChange={(e) => setNavRouteDescription(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSaveNavRouteDialogOpen(false)}>Abbrechen</Button>
+          <Button onClick={handleSaveNavigationRoute} color="primary">
+            Speichern
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Speichern-Button für Navigationsrouten NICHT mehr anzeigen, da er jetzt in der Navigationskomponente ist */}
+
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+      >
+        <Alert onClose={() => setSnackbarOpen(false)} severity={snackbarSeverity} sx={{ width: '100%' }}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+});
+
+export default Map; 

@@ -575,6 +575,13 @@ const Sidebar: React.FC = () => {
                 '& .MuiTab-iconWrapper': { marginBottom: '8px' },
                 '& .MuiTab-wrapper': { display: 'flex', flexDirection: 'column' },
                 fontSize: '0.75rem',
+                padding: '12px 4px',
+                // Explizites Styling für den ausgewählten Zustand
+                '&.Mui-selected': {
+                  flexDirection: 'column',
+                  '& .MuiTab-iconWrapper': { marginBottom: '8px' },
+                  '& .MuiTab-wrapper': { display: 'flex', flexDirection: 'column' }
+                }
               }}
             />
             <Tab 
@@ -588,6 +595,13 @@ const Sidebar: React.FC = () => {
                 '& .MuiTab-iconWrapper': { marginBottom: '8px' },
                 '& .MuiTab-wrapper': { display: 'flex', flexDirection: 'column' },
                 fontSize: '0.75rem',
+                padding: '12px 4px',
+                // Explizites Styling für den ausgewählten Zustand
+                '&.Mui-selected': {
+                  flexDirection: 'column',
+                  '& .MuiTab-iconWrapper': { marginBottom: '8px' },
+                  '& .MuiTab-wrapper': { display: 'flex', flexDirection: 'column' }
+                }
               }}
             />
             <Tab 
@@ -600,6 +614,13 @@ const Sidebar: React.FC = () => {
                 '& .MuiTab-iconWrapper': { marginBottom: '8px' },
                 '& .MuiTab-wrapper': { display: 'flex', flexDirection: 'column' },
                 fontSize: '0.75rem',
+                padding: '12px 4px',
+                // Explizites Styling für den ausgewählten Zustand
+                '&.Mui-selected': {
+                  flexDirection: 'column',
+                  '& .MuiTab-iconWrapper': { marginBottom: '8px' },
+                  '& .MuiTab-wrapper': { display: 'flex', flexDirection: 'column' }
+                }
               }}
             />
           </Tabs>

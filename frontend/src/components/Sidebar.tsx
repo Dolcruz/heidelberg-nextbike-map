@@ -566,34 +566,55 @@ const Sidebar: React.FC = () => {
           >
             <Tab 
               icon={<MapIcon />} 
-              label="Fahrradwege" 
+              label="ÜBERSICHT" 
               value="bikePaths" 
               disabled={!user}
               sx={{ 
                 minWidth: 0,
                 '& .MuiTab-iconWrapper': { marginBottom: 0.5 },
-                '& .MuiTab-labelIcon': { minHeight: 'auto' }
+                '& .MuiTab-wrapper': { 
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1.1,
+                  fontSize: '0.75rem',
+                },
+                fontSize: '0.75rem'
               }}
             />
             <Tab 
               icon={<RouteIcon />} 
-              label="Routen" 
+              label="ROUTEN" 
               value="navRoutes" 
               disabled={!user}
               sx={{ 
                 minWidth: 0,
                 '& .MuiTab-iconWrapper': { marginBottom: 0.5 },
-                '& .MuiTab-labelIcon': { minHeight: 'auto' }
+                '& .MuiTab-wrapper': { 
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1.1,
+                  fontSize: '0.75rem',
+                },
+                fontSize: '0.75rem'
               }}
             />
             <Tab 
               icon={<PublicIcon />} 
-              label="Öffentlich" 
+              label="ÖFFENTLICH" 
               value="public" 
               sx={{ 
                 minWidth: 0,
                 '& .MuiTab-iconWrapper': { marginBottom: 0.5 },
-                '& .MuiTab-labelIcon': { minHeight: 'auto' }
+                '& .MuiTab-wrapper': { 
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1.1,
+                  fontSize: '0.75rem',
+                },
+                fontSize: '0.75rem'
               }}
             />
           </Tabs>

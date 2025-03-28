@@ -556,74 +556,75 @@ const Sidebar: React.FC = () => {
           </Box>
           
           {/* Tab-Navigation */}
-          <Tabs
-            value={currentTab}
-            onChange={handleTabChange}
-            variant="fullWidth"
-            indicatorColor="primary"
-            textColor="primary"
-            sx={{ mb: 2 }}
-          >
-            <Tab 
-              icon={<MapIcon />} 
-              label="ÜBERSICHT" 
-              value="bikePaths" 
-              disabled={!user}
+          <Box sx={{ display: 'flex', width: '100%', mb: 2, borderBottom: 1, borderColor: 'divider' }}>
+            <Box 
+              onClick={() => user && handleTabChange({} as any, 'bikePaths')}
               sx={{ 
-                minWidth: 0,
+                flex: 1, 
+                textAlign: 'center', 
+                py: 1.5,
+                display: 'flex',
                 flexDirection: 'column',
-                '& .MuiTab-iconWrapper': { marginBottom: '8px' },
-                '& .MuiTab-wrapper': { display: 'flex', flexDirection: 'column' },
-                fontSize: '0.75rem',
-                padding: '12px 4px',
-                // Explizites Styling für den ausgewählten Zustand
-                '&.Mui-selected': {
-                  flexDirection: 'column',
-                  '& .MuiTab-iconWrapper': { marginBottom: '8px' },
-                  '& .MuiTab-wrapper': { display: 'flex', flexDirection: 'column' }
-                }
+                alignItems: 'center',
+                borderBottom: currentTab === 'bikePaths' ? 2 : 0,
+                borderColor: 'primary.main',
+                color: currentTab === 'bikePaths' ? 'primary.main' : user ? 'text.primary' : 'text.disabled',
+                cursor: user ? 'pointer' : 'default',
+                '&:hover': user ? { bgcolor: 'action.hover' } : {},
+                opacity: user ? 1 : 0.5,
               }}
-            />
-            <Tab 
-              icon={<RouteIcon />} 
-              label="ROUTEN" 
-              value="navRoutes" 
-              disabled={!user}
+            >
+              <MapIcon sx={{ mb: 0.5 }} />
+              <Typography variant="caption" sx={{ fontSize: '0.7rem', textTransform: 'uppercase', lineHeight: 1, display: 'block' }}>
+                Übersicht
+              </Typography>
+            </Box>
+            
+            <Box 
+              onClick={() => user && handleTabChange({} as any, 'navRoutes')}
               sx={{ 
-                minWidth: 0,
+                flex: 1, 
+                textAlign: 'center', 
+                py: 1.5,
+                display: 'flex',
                 flexDirection: 'column',
-                '& .MuiTab-iconWrapper': { marginBottom: '8px' },
-                '& .MuiTab-wrapper': { display: 'flex', flexDirection: 'column' },
-                fontSize: '0.75rem',
-                padding: '12px 4px',
-                // Explizites Styling für den ausgewählten Zustand
-                '&.Mui-selected': {
-                  flexDirection: 'column',
-                  '& .MuiTab-iconWrapper': { marginBottom: '8px' },
-                  '& .MuiTab-wrapper': { display: 'flex', flexDirection: 'column' }
-                }
+                alignItems: 'center',
+                borderBottom: currentTab === 'navRoutes' ? 2 : 0,
+                borderColor: 'primary.main',
+                color: currentTab === 'navRoutes' ? 'primary.main' : user ? 'text.primary' : 'text.disabled',
+                cursor: user ? 'pointer' : 'default',
+                '&:hover': user ? { bgcolor: 'action.hover' } : {},
+                opacity: user ? 1 : 0.5,
               }}
-            />
-            <Tab 
-              icon={<PublicIcon />} 
-              label="ÖFFENTLICH" 
-              value="public" 
+            >
+              <RouteIcon sx={{ mb: 0.5 }} />
+              <Typography variant="caption" sx={{ fontSize: '0.7rem', textTransform: 'uppercase', lineHeight: 1, display: 'block' }}>
+                Routen
+              </Typography>
+            </Box>
+            
+            <Box 
+              onClick={() => handleTabChange({} as any, 'public')}
               sx={{ 
-                minWidth: 0,
+                flex: 1, 
+                textAlign: 'center', 
+                py: 1.5,
+                display: 'flex',
                 flexDirection: 'column',
-                '& .MuiTab-iconWrapper': { marginBottom: '8px' },
-                '& .MuiTab-wrapper': { display: 'flex', flexDirection: 'column' },
-                fontSize: '0.75rem',
-                padding: '12px 4px',
-                // Explizites Styling für den ausgewählten Zustand
-                '&.Mui-selected': {
-                  flexDirection: 'column',
-                  '& .MuiTab-iconWrapper': { marginBottom: '8px' },
-                  '& .MuiTab-wrapper': { display: 'flex', flexDirection: 'column' }
-                }
+                alignItems: 'center',
+                borderBottom: currentTab === 'public' ? 2 : 0,
+                borderColor: 'primary.main',
+                color: currentTab === 'public' ? 'primary.main' : 'text.primary',
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.hover' },
               }}
-            />
-          </Tabs>
+            >
+              <PublicIcon sx={{ mb: 0.5 }} />
+              <Typography variant="caption" sx={{ fontSize: '0.7rem', textTransform: 'uppercase', lineHeight: 1, display: 'block' }}>
+                Öffentlich
+              </Typography>
+            </Box>
+          </Box>
           
           {/* Benutzerstatistiken anzeigen, wenn eingeloggt */}
           {user && userStats && (currentTab === 'navRoutes') && (

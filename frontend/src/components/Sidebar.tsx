@@ -562,59 +562,59 @@ const Sidebar: React.FC = () => {
             variant="fullWidth"
             indicatorColor="primary"
             textColor="primary"
-            sx={{ mb: 2 }}
+            sx={{ 
+              mb: 2,
+              '& .MuiTabs-flexContainer': {
+                justifyContent: 'space-between',
+              },
+              '& .MuiTab-root': {
+                flexGrow: 1,
+                maxWidth: 'none'
+              }
+            }}
           >
             <Tab 
               icon={<MapIcon />} 
-              label="ÜBERSICHT" 
+              label="Fahrradwege" 
               value="bikePaths" 
               disabled={!user}
               sx={{ 
                 minWidth: 0,
                 '& .MuiTab-iconWrapper': { marginBottom: 0.5 },
-                '& .MuiTab-wrapper': { 
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  lineHeight: 1.1,
-                  fontSize: '0.75rem',
-                },
-                fontSize: '0.75rem'
+                '& .MuiTab-labelIcon': { minHeight: 'auto' },
+                fontSize: '0.75rem',
+                padding: '6px 4px',
+                whiteSpace: 'nowrap',
+                overflow: 'visible'
               }}
             />
             <Tab 
               icon={<RouteIcon />} 
-              label="ROUTEN" 
+              label="Routen" 
               value="navRoutes" 
               disabled={!user}
               sx={{ 
                 minWidth: 0,
                 '& .MuiTab-iconWrapper': { marginBottom: 0.5 },
-                '& .MuiTab-wrapper': { 
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  lineHeight: 1.1,
-                  fontSize: '0.75rem',
-                },
-                fontSize: '0.75rem'
+                '& .MuiTab-labelIcon': { minHeight: 'auto' },
+                fontSize: '0.75rem',
+                padding: '6px 4px',
+                whiteSpace: 'nowrap',
+                overflow: 'visible'
               }}
             />
             <Tab 
               icon={<PublicIcon />} 
-              label="ÖFFENTLICH" 
+              label="Öffentlich" 
               value="public" 
               sx={{ 
                 minWidth: 0,
                 '& .MuiTab-iconWrapper': { marginBottom: 0.5 },
-                '& .MuiTab-wrapper': { 
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  lineHeight: 1.1,
-                  fontSize: '0.75rem',
-                },
-                fontSize: '0.75rem'
+                '& .MuiTab-labelIcon': { minHeight: 'auto' },
+                fontSize: '0.75rem',
+                padding: '6px 4px',
+                whiteSpace: 'nowrap',
+                overflow: 'visible'
               }}
             />
           </Tabs>

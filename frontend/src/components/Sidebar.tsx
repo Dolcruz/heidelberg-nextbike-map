@@ -574,8 +574,21 @@ const Sidebar: React.FC = () => {
                 opacity: user ? 1 : 0.5,
               }}
             >
-              <MapIcon sx={{ mb: 0.5 }} />
-              <Typography variant="caption" sx={{ fontSize: '0.7rem', textTransform: 'uppercase', lineHeight: 1, display: 'block' }}>
+              <MapIcon sx={{ mb: 0.75 }} />
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  fontSize: '0.75rem', 
+                  textTransform: 'uppercase', 
+                  lineHeight: 1.2,
+                  display: 'block',
+                  whiteSpace: 'nowrap',
+                  overflow: 'visible',
+                  width: '100%',
+                  textAlign: 'center',
+                  fontWeight: currentTab === 'bikePaths' ? 'medium' : 'normal'
+                }}
+              >
                 Übersicht
               </Typography>
             </Box>
@@ -597,8 +610,21 @@ const Sidebar: React.FC = () => {
                 opacity: user ? 1 : 0.5,
               }}
             >
-              <RouteIcon sx={{ mb: 0.5 }} />
-              <Typography variant="caption" sx={{ fontSize: '0.7rem', textTransform: 'uppercase', lineHeight: 1, display: 'block' }}>
+              <RouteIcon sx={{ mb: 0.75 }} />
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  fontSize: '0.75rem', 
+                  textTransform: 'uppercase', 
+                  lineHeight: 1.2,
+                  display: 'block',
+                  whiteSpace: 'nowrap',
+                  overflow: 'visible',
+                  width: '100%',
+                  textAlign: 'center',
+                  fontWeight: currentTab === 'navRoutes' ? 'medium' : 'normal'
+                }}
+              >
                 Routen
               </Typography>
             </Box>
@@ -619,8 +645,21 @@ const Sidebar: React.FC = () => {
                 '&:hover': { bgcolor: 'action.hover' },
               }}
             >
-              <PublicIcon sx={{ mb: 0.5 }} />
-              <Typography variant="caption" sx={{ fontSize: '0.7rem', textTransform: 'uppercase', lineHeight: 1, display: 'block' }}>
+              <PublicIcon sx={{ mb: 0.75 }} />
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  fontSize: '0.75rem', 
+                  textTransform: 'uppercase', 
+                  lineHeight: 1.2,
+                  display: 'block',
+                  whiteSpace: 'nowrap',
+                  overflow: 'visible',
+                  width: '100%',
+                  textAlign: 'center',
+                  fontWeight: currentTab === 'public' ? 'medium' : 'normal'
+                }}
+              >
                 Öffentlich
               </Typography>
             </Box>

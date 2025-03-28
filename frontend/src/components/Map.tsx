@@ -737,13 +737,27 @@ const Map = forwardRef<MapHandle, MapProps>(({
                 <span><strong>Länge:</strong> ${calculateRouteLength(route.points).toFixed(2)} km</span>
                 <span><strong>Erstellt:</strong> ${route.createdAt.toLocaleDateString()}</span>
               </div>
-              ${route.rating ? `
-                <div style="margin-top: 8px; font-size: 13px;">
-                  <strong>Bewertung:</strong> 
+              <div style="margin-top: 8px; font-size: 13px;">
+                <strong>Bewertung:</strong> 
+                ${route.rating ? `
                   <span style="color: orange; font-size: 14px;">${ratingStars}</span> 
                   <span>(${route.rating})</span>
                   ${route.ratingCount ? `<span> - ${route.ratingCount} Bewertung${route.ratingCount !== 1 ? 'en' : ''}</span>` : ''}
-                </div>` : ''}
+                ` : '<span style="color: #888;">Noch nicht bewertet</span>'}
+              </div>
+              
+              <!-- Direkte Bewertungsmöglichkeit -->
+              <div style="margin-top: 10px; display: flex; align-items: center; justify-content: center;">
+                <div class="rating-stars" style="display: inline-flex; cursor: pointer;">
+                  <span id="rate-1-${route.id}" style="font-size: 18px; color: #ccc; margin-right: 2px;">★</span>
+                  <span id="rate-2-${route.id}" style="font-size: 18px; color: #ccc; margin-right: 2px;">★</span>
+                  <span id="rate-3-${route.id}" style="font-size: 18px; color: #ccc; margin-right: 2px;">★</span>
+                  <span id="rate-4-${route.id}" style="font-size: 18px; color: #ccc; margin-right: 2px;">★</span>
+                  <span id="rate-5-${route.id}" style="font-size: 18px; color: #ccc;">★</span>
+                </div>
+                <span id="rating-feedback-${route.id}" style="margin-left: 10px; font-size: 12px;"></span>
+              </div>
+              
               ${route.slope ? `
                 <div style="margin-top: 5px; font-size: 13px;">
                   <strong>Steigung:</strong> 
@@ -751,14 +765,21 @@ const Map = forwardRef<MapHandle, MapProps>(({
                     ${formatSlope(route.slope)}
                   </span>
                 </div>` : ''}
-              ${route.userId === auth.currentUser?.uid ? `
-                <hr style="border: 0; border-top: 1px solid #eee; margin: 8px 0;">
-                <div style="margin-top: 10px; text-align: center;">
+              
+              <hr style="border: 0; border-top: 1px solid #eee; margin: 8px 0;">
+              <div style="margin-top: 10px; display: flex; justify-content: ${route.userId === auth.currentUser?.uid ? 'space-between' : 'center'};">
+                <!-- Bearbeiten-Button für alle Benutzer -->
+                <button id="edit-route-${route.id}" style="background-color: #1976d2; color: white; border: none; border-radius: 4px; padding: 5px 12px; cursor: pointer; font-size: 12px;">
+                  Bearbeiten
+                </button>
+                
+                ${route.userId === auth.currentUser?.uid ? `
+                  <!-- Löschen-Button nur für Eigentümer -->
                   <button id="delete-route-${route.id}" style="background-color: #ff4d4f; color: white; border: none; border-radius: 4px; padding: 5px 12px; cursor: pointer; font-size: 12px;">
-                    Fahrradweg löschen
+                    Löschen
                   </button>
-                </div>
-              ` : ''}
+                ` : ''}
+              </div>
             </div>
           `;
           
@@ -766,38 +787,163 @@ const Map = forwardRef<MapHandle, MapProps>(({
           polyline.bindPopup(popupContent);
           
           // Event-Handler zum Löschen eines Fahrradwegs hinzufügen
-          if (route.id && route.userId === auth.currentUser?.uid) {
+          if (route.id) {
             polyline.on('popupopen', () => {
               // Button erst dann suchen, wenn das Popup geöffnet wurde
               setTimeout(() => {
-                const deleteButton = document.getElementById(`delete-route-${route.id}`);
-                if (deleteButton) {
-                  deleteButton.addEventListener('click', async () => {
+                // Event-Handler für Löschbutton (nur wenn Nutzer der Ersteller ist)
+                if (route.userId === auth.currentUser?.uid) {
+                  const deleteButton = document.getElementById(`delete-route-${route.id}`);
+                  if (deleteButton) {
+                    deleteButton.addEventListener('click', async () => {
+                      try {
+                        // Fahrradweg aus der Datenbank löschen
+                        await deleteRoute(route.id!, auth.currentUser?.uid, auth.currentUser?.email === 'pfistererfalk@gmail.com');
+                        
+                        // Fahrradweg von der Karte entfernen
+                        if (savedRoutesLayersRef.current[route.id!]) {
+                          savedRoutesLayersRef.current[route.id!].remove();
+                          delete savedRoutesLayersRef.current[route.id!];
+                        }
+                        
+                        // Liste der gespeicherten Routen aktualisieren
+                        if (auth.currentUser) {
+                          fetchUserRoutes(auth.currentUser.uid);
+                        }
+                        
+                        // Popup schließen
+                        mapRef.current?.closePopup();
+                        
+                        // Erfolgsbenachrichtigung anzeigen
+                        showNotification('Fahrradweg wurde gelöscht', 'success');
+                      } catch (error) {
+                        console.error('Fehler beim Löschen des Fahrradwegs:', error);
+                        showNotification('Fehler beim Löschen des Fahrradwegs', 'error');
+                      }
+                    });
+                  }
+                }
+                
+                // Event-Handler für Bearbeiten-Button
+                const editButton = document.getElementById(`edit-route-${route.id}`);
+                if (editButton) {
+                  editButton.addEventListener('click', () => {
                     try {
-                      // Fahrradweg aus der Datenbank löschen
-                      // Hier wird die userId aus route.userId verwendet und isAdmin auf false gesetzt,
-                      // da normale Benutzer nur ihre eigenen Routen löschen dürfen
-                      await deleteRoute(route.id!, auth.currentUser?.uid, auth.currentUser?.email === 'pfistererfalk@gmail.com');
-                      
-                      // Fahrradweg von der Karte entfernen
-                      if (savedRoutesLayersRef.current[route.id!]) {
-                        savedRoutesLayersRef.current[route.id!].remove();
-                        delete savedRoutesLayersRef.current[route.id!];
-                      }
-                      
-                      // Liste der gespeicherten Routen aktualisieren
-                      if (auth.currentUser) {
-                        fetchUserRoutes(auth.currentUser.uid);
-                      }
-                      
                       // Popup schließen
                       mapRef.current?.closePopup();
                       
-                      // Erfolgsbenachrichtigung anzeigen
-                      showNotification('Fahrradweg wurde gelöscht', 'success');
+                      // Eigenes Event auslösen, das von der übergeordneten Komponente abgefangen werden kann
+                      window.dispatchEvent(new CustomEvent('editRoute', { 
+                        detail: { 
+                          routeId: route.id
+                        }
+                      }));
+                      
+                      showNotification('Bearbeite Straßeneigenschaften...', 'info');
                     } catch (error) {
-                      console.error('Fehler beim Löschen des Fahrradwegs:', error);
-                      showNotification('Fehler beim Löschen des Fahrradwegs', 'error');
+                      console.error('Fehler beim Öffnen des Bearbeitungsdialogs:', error);
+                      showNotification('Fehler beim Öffnen des Dialogs', 'error');
+                    }
+                  });
+                }
+                
+                // Bewertungssterne mit Interaktivität versehen
+                const ratingStars = [1, 2, 3, 4, 5].map(rating => {
+                  return document.getElementById(`rate-${rating}-${route.id}`);
+                }) as (HTMLElement | null)[];
+                
+                // Feedback-Element
+                const feedbackElement = document.getElementById(`rating-feedback-${route.id}`);
+                
+                // Aktuelle Bewertung hervorheben, falls vorhanden
+                if (route.rating !== undefined && route.rating !== null) {
+                  // Highlight stars based on the route's rating
+                  const ratingElements = document.querySelectorAll(`#route-${route.id} .rating-star`);
+                  const fullStars = Math.floor(route.rating);
+                  for (let i = 0; i < fullStars; i++) {
+                    const star = ratingElements[i] as HTMLElement;
+                    if (star) star.style.color = 'orange';
+                  }
+                } else {
+                  // Keine Bewertung vorhanden, alle Sterne zurücksetzen
+                  const ratingElements = document.querySelectorAll(`#route-${route.id} .rating-star`);
+                  for (let i = 0; i < 5; i++) {
+                    const star = ratingElements[i] as HTMLElement;
+                    if (star) star.style.color = '#ccc';
+                  }
+                }
+                
+                // Event-Handler für die Sterne
+                ratingStars.forEach((star, index) => {
+                  if (!star) return;
+                  
+                  // Mouse-Over-Effekt
+                  star.addEventListener('mouseover', () => {
+                    // Setze alle Sterne bis zum aktuellen auf gelb
+                    for (let i = 0; i <= index; i++) {
+                      const starEl = ratingStars[i] as HTMLElement | null;
+                      if (starEl) starEl.style.color = 'orange';
+                    }
+                    // Setze alle Sterne nach dem aktuellen auf grau
+                    for (let i = index + 1; i < 5; i++) {
+                      const starEl = ratingStars[i] as HTMLElement | null;
+                      if (starEl) starEl.style.color = '#ccc';
+                    }
+                  });
+                  
+                  // Klick-Event
+                  star.addEventListener('click', async () => {
+                    const ratingValue = index + 1;
+                    
+                    try {
+                      // Hier Logik für das Speichern der Bewertung einfügen
+                      // Da es keine direkte Funktion gibt, erstellen wir ein CustomEvent
+                      window.dispatchEvent(new CustomEvent('rateRoute', { 
+                        detail: { 
+                          routeId: route.id,
+                          rating: ratingValue
+                        }
+                      }));
+                      
+                      if (feedbackElement) {
+                        feedbackElement.textContent = 'Bewertung gespeichert!';
+                        feedbackElement.style.color = 'green';
+                        
+                        // Feedback nach kurzer Zeit ausblenden
+                        setTimeout(() => {
+                          if (feedbackElement) feedbackElement.textContent = '';
+                        }, 3000);
+                      }
+                    } catch (error) {
+                      console.error('Fehler beim Speichern der Bewertung:', error);
+                      if (feedbackElement) {
+                        feedbackElement.textContent = 'Fehler!';
+                        feedbackElement.style.color = 'red';
+                      }
+                    }
+                  });
+                });
+                
+                // Mouse-Leave-Effekt für den gesamten Sternbereich
+                const ratingContainer = document.querySelector('.rating-stars');
+                if (ratingContainer) {
+                  ratingContainer.addEventListener('mouseleave', () => {
+                    // Zurücksetzen auf die tatsächliche Bewertung
+                    if (route.rating !== undefined && route.rating !== null) {
+                      // Highlight stars based on the route's rating
+                      const ratingStars = document.querySelectorAll(`#route-${route.id} .rating-star`);
+                      const fullStars = Math.floor(route.rating);
+                      for (let i = 0; i < 5; i++) {
+                        const star = ratingStars[i] as HTMLElement;
+                        if (star) star.style.color = i < fullStars ? 'orange' : '#ccc';
+                      }
+                    } else {
+                      // Keine Bewertung vorhanden, alle Sterne zurücksetzen
+                      const ratingStars = document.querySelectorAll(`#route-${route.id} .rating-star`);
+                      for (let i = 0; i < 5; i++) {
+                        const star = ratingStars[i] as HTMLElement;
+                        if (star) star.style.color = '#ccc';
+                      }
                     }
                   });
                 }
@@ -2037,7 +2183,7 @@ const Map = forwardRef<MapHandle, MapProps>(({
               <span style="color: white; font-weight: bold; font-size: 0.9rem; font-family: Arial;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                   <path d="M4 4.5a.5.5 0 0 1 .5-.5H6a.5.5 0 0 1 0 1v.5h4.14l.386-1.158A.5.5 0 0 1 11 4h1a.5.5 0 0 1 0 1h-.64l-.311.935.807 1.29a3 3 0 1 1-.848.53l-.508-.812-2.076 3.322A.5.5 0 0 1 8 10.5H5.959a3 3 0 1 1-1.815-3.274L5 5.856V5h-.5a.5.5 0 0 1-.5-.5zm1.5 2.443-.508.814c.5.444.85 1.054.967 1.743h1.139L5.5 6.943zM8 9.057 9.598 6.5H6.402L8 9.057zM4.937 9.5a1.997 1.997 0 0 0-.487-.877l-.548.877h1.035zM3.603 8.092A2 2 0 1 0 4.937 10.5H3a.5.5 0 0 1-.424-.765l1.027-1.643zm7.947.53a2 2 0 1 0 .848-.53l1.026 1.643a.5.5 0 1 1-.848.53L11.55 8.623z"/>
-                </svg>
+                  </svg>
               </span>
               <div style="position: absolute; top: -10px; right: -10px; background-color: #3f51b5; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; justify-content: center; align-items: center; font-size: 0.7rem; font-weight: bold; border: 1px solid white;">
                 ${station.bikeCapacity || '?'}

@@ -3210,27 +3210,7 @@ const Map = forwardRef<MapHandle, MapProps>(({
         }
       }}
     >
-      {/* Nextbike Button zum manuellen Aktualisieren */}
-      <Button
-        variant="contained"
-        color="primary"
-        sx={{
-          position: 'absolute',
-          top: '70px',
-          right: '10px',
-          zIndex: 1000,
-          backgroundColor: '#3f51b5',
-          borderRadius: '4px',
-          padding: '6px 10px',
-          minWidth: 'auto',
-          fontSize: '0.8rem'
-        }}
-        onClick={fetchAndDisplayNextbikeStations}
-        title="Nextbike-Stationen im sichtbaren Bereich aktualisieren"
-      >
-        <RefreshIcon fontSize="small" />
-        <span style={{ marginLeft: '4px' }}>Nextbike laden</span>
-      </Button>
+      {/* Nextbike Button zum manuellen Aktualisieren - entfernt */}
       
       {/* Navigations-Button */}
       {!isDrawingMode && (

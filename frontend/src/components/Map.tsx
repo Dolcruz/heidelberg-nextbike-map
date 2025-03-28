@@ -1996,12 +1996,12 @@ const Map = forwardRef<MapHandle, MapProps>(({
       } else {
         nextbikeLayerGroupRef.current = L.layerGroup();
       }
-      
-      // Nur hinzufügen, wenn der Zoom-Level ausreichend ist
+        
+        // Nur hinzufügen, wenn der Zoom-Level ausreichend ist
       const currentZoom = map.getZoom();
       
       if (currentZoom >= MIN_ZOOM_LEVEL_NEXTBIKE) {
-        nextbikeLayerGroupRef.current.addTo(map);
+          nextbikeLayerGroupRef.current.addTo(map);
         
         // Get current map bounds to filter stations
         const mapBounds = map.getBounds();
@@ -2013,11 +2013,11 @@ const Map = forwardRef<MapHandle, MapProps>(({
         
         // Reset markers array before adding new markers
         nextbikeMarkersRef.current = [];
-        
-        // Zeige die Nextbike-Stationen auf der Karte an
+      
+      // Zeige die Nextbike-Stationen auf der Karte an
         visibleNextbikeStations.forEach((station: NextbikeStation) => {
-          const position = L.latLng(station.position.lat, station.position.lng);
-          
+        const position = L.latLng(station.position.lat, station.position.lng);
+        
           // Verbesserte Icon-Darstellung für Nextbike-Stationen
           const markerHtmlStyles = `
             position: relative;
@@ -2034,7 +2034,11 @@ const Map = forwardRef<MapHandle, MapProps>(({
 
           const iconHtml = `
             <div style="${markerHtmlStyles}">
-              <span style="color: white; font-weight: bold; font-size: 0.9rem; font-family: Arial;">NB</span>
+              <span style="color: white; font-weight: bold; font-size: 0.9rem; font-family: Arial;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M4 4.5a.5.5 0 0 1 .5-.5H6a.5.5 0 0 1 0 1v.5h4.14l.386-1.158A.5.5 0 0 1 11 4h1a.5.5 0 0 1 0 1h-.64l-.311.935.807 1.29a3 3 0 1 1-.848.53l-.508-.812-2.076 3.322A.5.5 0 0 1 8 10.5H5.959a3 3 0 1 1-1.815-3.274L5 5.856V5h-.5a.5.5 0 0 1-.5-.5zm1.5 2.443-.508.814c.5.444.85 1.054.967 1.743h1.139L5.5 6.943zM8 9.057 9.598 6.5H6.402L8 9.057zM4.937 9.5a1.997 1.997 0 0 0-.487-.877l-.548.877h1.035zM3.603 8.092A2 2 0 1 0 4.937 10.5H3a.5.5 0 0 1-.424-.765l1.027-1.643zm7.947.53a2 2 0 1 0 .848-.53l1.026 1.643a.5.5 0 1 1-.848.53L11.55 8.623z"/>
+                </svg>
+              </span>
               <div style="position: absolute; top: -10px; right: -10px; background-color: #3f51b5; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; justify-content: center; align-items: center; font-size: 0.7rem; font-weight: bold; border: 1px solid white;">
                 ${station.bikeCapacity || '?'}
               </div>
@@ -2401,7 +2405,7 @@ const Map = forwardRef<MapHandle, MapProps>(({
         console.error("Fehler beim Aktualisieren der Nextbike-Layer-Sichtbarkeit:", error);
       }
     }
-    
+
     // Routenpunkte Layer-Gruppe - nur diese bleibt vom Editiermodus abhängig
     if (routePointLayerGroupRef.current) {
       try {
@@ -3231,11 +3235,11 @@ const Map = forwardRef<MapHandle, MapProps>(({
       {/* Navigations-Button */}
       {!isDrawingMode && (
         <Fab 
-          color="primary"
+          color="primary" 
           aria-label="navigation"
           onClick={toggleNavigation}
-          sx={{
-            position: 'absolute',
+          sx={{ 
+            position: 'absolute', 
             bottom: 20, 
             right: 20, 
             zIndex: 1000 

@@ -20,6 +20,8 @@ export interface BikeStand {
   rating?: number;
   verifications?: number; // Anzahl der Bestätigungen durch andere Benutzer
   isVerified?: boolean;   // Wurde der Fahrradständer von anderen Benutzern verifiziert?
+  isAdminCreated?: boolean; // Wurde der Fahrradständer vom Admin erstellt?
+  isApproved?: boolean;   // Wurde der Fahrradständer von einem Admin genehmigt?
 }
 
 /**
@@ -33,7 +35,8 @@ export const saveBikeStand = async (
   isRoofed: boolean = false,
   isFree: boolean = true,
   isLighted: boolean = false,
-  rating?: number | null
+  rating?: number | null,
+  isAdmin: boolean = false
 ): Promise<string> => {
   try {
     // Erstelle ein neues Dokument in der bikeStands-Sammlung
@@ -50,6 +53,8 @@ export const saveBikeStand = async (
       isFree,
       isLighted,
       rating: rating === null ? undefined : rating, // Konvertiere null zu undefined
+      isAdminCreated: isAdmin, // Markiere, ob es vom Admin erstellt wurde
+      isApproved: isAdmin      // Wenn vom Admin erstellt, ist es automatisch genehmigt
     });
     
     console.log('Fahrradständer erfolgreich gespeichert mit ID:', docRef.id);
@@ -61,11 +66,16 @@ export const saveBikeStand = async (
 };
 
 /**
- * Ruft alle Fahrradständer ab
+ * Ruft alle genehmigten Fahrradständer ab
  */
 export const getAllBikeStands = async (): Promise<BikeStand[]> => {
   try {
-    const querySnapshot = await getDocs(collection(db, 'bikeStands'));
+    // Nur Fahrradständer abrufen, die entweder genehmigt oder vom Admin erstellt wurden
+    const q = query(
+      collection(db, 'bikeStands'),
+      where('isApproved', '==', true)
+    );
+    const querySnapshot = await getDocs(q);
     const bikeStands: BikeStand[] = [];
     
     querySnapshot.forEach((doc) => {
@@ -83,7 +93,9 @@ export const getAllBikeStands = async (): Promise<BikeStand[]> => {
         isRoofed: data.isRoofed || false,
         isFree: data.isFree !== false, // Default ist true, wenn nicht angegeben
         isLighted: data.isLighted || false,
-        rating: data.rating
+        rating: data.rating,
+        isAdminCreated: data.isAdminCreated || false,
+        isApproved: data.isApproved || false
       });
     });
     
@@ -231,6 +243,98 @@ export const getBikeStandsInBounds = async (bounds: L.LatLngBounds): Promise<Bik
     return bikeStands;
   } catch (error) {
     console.error('Fehler beim Abrufen der Fahrradständer in den Grenzen:', error);
+    throw error;
+  }
+};
+
+/**
+ * Ruft alle Fahrradständer ab (inklusive nicht genehmigter für Admin-Zwecke)
+ */
+export const getAllAdminBikeStands = async (): Promise<BikeStand[]> => {
+  try {
+    const querySnapshot = await getDocs(collection(db, 'bikeStands'));
+    const bikeStands: BikeStand[] = [];
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      bikeStands.push({
+        id: doc.id,
+        position: {
+          lat: data.position.lat,
+          lng: data.position.lng
+        },
+        createdAt: data.createdAt?.toDate() || new Date(),
+        createdBy: data.createdBy,
+        description: data.description,
+        capacity: data.capacity,
+        isRoofed: data.isRoofed || false,
+        isFree: data.isFree !== false,
+        isLighted: data.isLighted || false,
+        rating: data.rating,
+        isAdminCreated: data.isAdminCreated || false,
+        isApproved: data.isApproved || false
+      });
+    });
+    
+    return bikeStands;
+  } catch (error) {
+    console.error('Fehler beim Abrufen aller Fahrradständer für Admin:', error);
+    throw error;
+  }
+};
+
+/**
+ * Holt alle nicht freigegebenen Fahrradständer für den Admin zur Überprüfung
+ */
+export const getUnapprovedBikeStands = async (): Promise<BikeStand[]> => {
+  try {
+    // Wir suchen nach Fahrradständern, die nicht vom Admin erstellt wurden und noch nicht freigegeben sind
+    const q = query(
+      collection(db, 'bikeStands'), 
+      where('isAdminCreated', '==', false),
+      where('isApproved', '==', false)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    
+    return querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        position: {
+          lat: data.position.lat,
+          lng: data.position.lng
+        },
+        createdAt: data.createdAt?.toDate() || new Date(),
+        createdBy: data.createdBy,
+        description: data.description,
+        capacity: data.capacity,
+        isRoofed: data.isRoofed || false,
+        isFree: data.isFree !== false,
+        isLighted: data.isLighted || false,
+        rating: data.rating,
+        isAdminCreated: data.isAdminCreated || false,
+        isApproved: data.isApproved || false
+      };
+    });
+  } catch (error) {
+    console.error('Fehler beim Abrufen nicht genehmigter Fahrradständer:', error);
+    throw error;
+  }
+};
+
+/**
+ * Genehmigt oder lehnt einen Fahrradständer ab
+ */
+export const approveBikeStand = async (bikeStandId: string, approved: boolean): Promise<void> => {
+  try {
+    const bikeStandRef = doc(db, 'bikeStands', bikeStandId);
+    await updateDoc(bikeStandRef, {
+      isApproved: approved
+    });
+    console.log(`Fahrradständer ${approved ? 'genehmigt' : 'abgelehnt'}`);
+  } catch (error) {
+    console.error('Fehler beim Genehmigen/Ablehnen des Fahrradständers:', error);
     throw error;
   }
 }; 

@@ -173,6 +173,9 @@ const Map = forwardRef<MapHandle, MapProps>(({
   const reviewStartMarkerRef = useRef<L.Marker | null>(null);
   const reviewEndMarkerRef = useRef<L.Marker | null>(null);
   
+  // Ref für temporären Marker zur Admin-Überprüfung von Fahrradständern
+  const tempReviewBikeStandMarkerRef = useRef<L.Marker | null>(null);
+  
   // Layer-Gruppen für POIs und andere Marker
   const poiLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const bikeStandLayerGroupRef = useRef<L.LayerGroup | null>(null);
@@ -483,7 +486,7 @@ const Map = forwardRef<MapHandle, MapProps>(({
               </button>
               <button id="connect-route-btn" style="background-color: #4CAF50; color: white; border: none; border-radius: 4px; padding: 5px 8px; margin: 3px; cursor: pointer; flex: 1; font-size: 12px;">
                 Route hier verbinden
-              </button>
+            </button>
             </div>
           </div>
         `).openPopup();
@@ -496,10 +499,10 @@ const Map = forwardRef<MapHandle, MapProps>(({
             addButton.addEventListener('click', async () => {
               // Stelle sicher, dass nearestSegment nicht null ist
               if (nearestSegment) {
-                // Füge den Punkt zur Route hinzu
-                await addPointToExistingRoute(
-                  nearestSegment.routeId,
-                  nearestSegment.insertIndex,
+              // Füge den Punkt zur Route hinzu
+              await addPointToExistingRoute(
+                nearestSegment.routeId,
+                nearestSegment.insertIndex,
                   projectionPoint
                 );
                 
@@ -881,7 +884,7 @@ const Map = forwardRef<MapHandle, MapProps>(({
           
           // Zeige Popup mit erweiterten Infos beim Klick an, aber nur wenn nicht im Zeichenmodus
           if (!isDrawingMode) {
-            polyline.bindPopup(popupContent);
+          polyline.bindPopup(popupContent);
           } else {
             // Im Zeichenmodus klickbar machen für die Verbindungsfunktion
             polyline.on('click', (e) => {
@@ -1166,12 +1169,12 @@ const Map = forwardRef<MapHandle, MapProps>(({
               
               // Füge Klick-Handler hinzu, wenn der Benutzer im Zeichenmodus ist
               marker.on('click', (e) => {
-                // Verhindere Standardverhalten (Propagation zur Karte)
-                L.DomEvent.stopPropagation(e);
-                
+                  // Verhindere Standardverhalten (Propagation zur Karte)
+                  L.DomEvent.stopPropagation(e);
+                  
                 // Diese Marker werden nur im Zeichenmodus angezeigt und dienen nur
                 // zum Verbinden von Routenpunkten. Niemals Popups anzeigen.
-                handleExistingPointClick(point);
+                  handleExistingPointClick(point);
               });
               
               // Marker nur zeigen, wenn Zeichenmodus aktiv ist

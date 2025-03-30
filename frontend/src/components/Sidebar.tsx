@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Drawer,
@@ -94,6 +94,24 @@ const Sidebar: React.FC = () => {
   });
   const [newTag, setNewTag] = useState('');
 
+  // Refs für aktuelle Werte
+  const routesRef = useRef<BikeRoute[]>([]);
+  const navRoutesRef = useRef<BikeRoute[]>([]);
+  const publicRoutesRef = useRef<BikeRoute[]>([]);
+  
+  // Aktualisiere die Refs bei Änderungen der Zustandsvariablen
+  useEffect(() => {
+    routesRef.current = routes;
+  }, [routes]);
+  
+  useEffect(() => {
+    navRoutesRef.current = navRoutes;
+  }, [navRoutes]);
+  
+  useEffect(() => {
+    publicRoutesRef.current = publicRoutes;
+  }, [publicRoutes]);
+
   // Funktion zum Starten des Größenänderungsvorgangs
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -169,7 +187,8 @@ const Sidebar: React.FC = () => {
       console.log('Route bearbeiten angefordert:', routeId);
       
       // Finde die Route in allen möglichen Routen-Listen
-      const route = [...routes, ...navRoutes, ...publicRoutes].find(r => r.id === routeId);
+      // Nutze die Refs anstelle der Zustandsvariablen, um immer auf aktuelle Werte zuzugreifen
+      const route = [...routesRef.current, ...navRoutesRef.current, ...publicRoutesRef.current].find(r => r.id === routeId);
       
       if (route) {
         // Öffne den Bearbeitungs-Dialog mit der gefundenen Route
@@ -189,7 +208,7 @@ const Sidebar: React.FC = () => {
       window.removeEventListener('navigationRouteSaved', handleNavigationRouteSaved);
       window.removeEventListener('editRoute', handleEditRoute);
     };
-  }, [routes, navRoutes, publicRoutes]); // Abhängigkeiten aktualisiert
+  }, []); // Entferne unnötige Abhängigkeiten, um kontinuierliche Aktualisierungen zu vermeiden
 
   // Fahrradwege des Benutzers abrufen
   const fetchUserRoutes = async (userId: string) => {

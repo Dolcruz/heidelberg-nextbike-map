@@ -464,34 +464,57 @@ const Map = forwardRef<MapHandle, MapProps>(({
       if (nearestSegment && nearestSegment.distance < 0.005) {
         console.log('Clicked near route segment, distance:', nearestSegment.distance);
         
-        // Zeige den Add-Point-Marker an
-        const addPointMarker = L.marker(newPoint, { 
+        // Berechne den genauen Punkt auf dem Segment (Projektion des Klickpunkts)
+        const segment = nearestSegment.segment;
+        const projectionPoint = calculateProjectionPoint(newPoint, segment[0], segment[1]);
+        
+        // Zeige den Marker an der projizierten Position statt der Klickposition
+        const addPointMarker = L.marker(projectionPoint, { 
           icon: AddPointIcon,
           opacity: 0.9
         }).addTo(map);
         
-        // Füge das Popup mit der Funktion zum Hinzufügen des Punktes hinzu
+        // Füge das Popup mit beiden Optionen hinzu
         addPointMarker.bindPopup(`
-          <div style="text-align: center;">
-            <h4 style="margin: 5px 0;">Routenpunkt hinzufügen</h4>
-            <p style="margin: 5px 0;">Möchtest du an dieser Stelle einen Routenpunkt hinzufügen?</p>
-            <button id="add-point-btn" style="background-color: #2196f3; color: white; border: none; border-radius: 4px; padding: 5px 12px; margin-top: 5px; cursor: pointer;">
-              Punkt hinzufügen
-            </button>
+          <div style="text-align: center; min-width: 220px;">
+            <h4 style="margin: 5px 0;">Routenpunkt Optionen</h4>
+            <p style="margin: 5px 0; font-size: 13px;">Was möchtest du an dieser Stelle tun?</p>
+            <div style="display: flex; justify-content: space-between; margin-top: 10px;">
+              <button id="add-segment-point-btn" style="background-color: #2196f3; color: white; border: none; border-radius: 4px; padding: 5px 8px; margin: 3px; cursor: pointer; flex: 1; font-size: 12px;">
+                Punkt zur Route hinzufügen
+              </button>
+              <button id="connect-route-btn" style="background-color: #4CAF50; color: white; border: none; border-radius: 4px; padding: 5px 8px; margin: 3px; cursor: pointer; flex: 1; font-size: 12px;">
+                Route hier verbinden
+              </button>
+            </div>
           </div>
         `).openPopup();
         
-        // Event-Handler für den Button im Popup
+        // Event-Handler für die Buttons im Popup
         setTimeout(() => {
-          const addButton = document.getElementById('add-point-btn');
+          // Handler für "Punkt zur Route hinzufügen"
+          const addButton = document.getElementById('add-segment-point-btn');
           if (addButton) {
             addButton.addEventListener('click', async () => {
               // Füge den Punkt zur Route hinzu
               await addPointToExistingRoute(
                 nearestSegment.routeId,
                 nearestSegment.insertIndex,
-                newPoint
+                projectionPoint
               );
+              
+              // Entferne den Marker und schließe das Popup
+              addPointMarker.remove();
+              map.closePopup();
+            });
+          }
+          
+          // Handler für "Route hier verbinden"
+          const connectButton = document.getElementById('connect-route-btn');
+          if (connectButton) {
+            connectButton.addEventListener('click', () => {
+              // Verbinde die aktuelle Route mit diesem Punkt
+              handleRouteSegmentConnection(projectionPoint);
               
               // Entferne den Marker und schließe das Popup
               addPointMarker.remove();
@@ -3640,6 +3663,90 @@ const Map = forwardRef<MapHandle, MapProps>(({
       mapRef.current?.off('zoomend', handleZoomChange);
     };
   }, [mapRef.current, updateLayerVisibility, setCurrentZoom]);
+
+  // Funktion zum Berechnen des Projektionspunkts auf einem Segment
+  const calculateProjectionPoint = (point: L.LatLng, segmentStart: L.LatLng, segmentEnd: L.LatLng): L.LatLng => {
+    const p = point;
+    const v = segmentStart;
+    const w = segmentEnd;
+    
+    // Quadrat der Länge des Segments
+    const l2 = Math.pow(calculateDistance(v, w), 2);
+    
+    if (l2 === 0) {
+      // Segment ist ein Punkt
+      return v;
+    }
+    
+    // Berechne Projektion des Punkts auf das Segment
+    const t = ((p.lat - v.lat) * (w.lat - v.lat) + (p.lng - v.lng) * (w.lng - v.lng)) / l2;
+    
+    if (t < 0) {
+      // Außerhalb des Segments, näher an v
+      return v;
+    }
+    
+    if (t > 1) {
+      // Außerhalb des Segments, näher an w
+      return w;
+    }
+    
+    // Auf dem Segment, berechne den Projektionspunkt
+    return new L.LatLng(
+      v.lat + t * (w.lat - v.lat),
+      v.lng + t * (w.lng - v.lng)
+    );
+  };
+
+  // Handler für die Verbindung einer Route mit einem Segment
+  const handleRouteSegmentConnection = (projectionPoint: L.LatLng) => {
+    console.log('Connecting route at segment point:', projectionPoint);
+    
+    const map = mapRef.current;
+    if (!map) return;
+    
+    // Wenn wir bereits Punkte haben, behandle als Endpunkt
+    if (points.length > 0) {
+      console.log('Using segment point as endpoint because we already have points:', points.length);
+      
+      // Füge den Projektion-Punkt zur Route hinzu
+      const newPoints = [...points, projectionPoint];
+      setPoints(newPoints);
+      
+      // Füge einen Marker für diesen Punkt hinzu
+      const marker = L.marker(projectionPoint).addTo(map);
+      markersRef.current.push(marker);
+      
+      // Aktualisiere die Polyline
+      if (polylineRef.current) {
+        polylineRef.current.remove();
+      }
+      
+      const polyline = L.polyline(newPoints, {
+        color: 'blue',
+        weight: 4,
+        opacity: 0.7
+      }).addTo(map);
+      
+      polylineRef.current = polyline;
+    } else {
+      // Wenn wir noch keine Punkte haben, beginne eine neue Route von diesem Punkt
+      console.log('Starting new route from segment point');
+      
+      // Setze den Status, damit wir wissen, dass wir von einem Segment zeichnen
+      setConnectingFromExistingPoint(true);
+      
+      // Lösche vorherige Zeichnung falls vorhanden
+      clearRoute();
+      
+      // Starte neue Route mit diesem Punkt
+      setPoints([projectionPoint]);
+      
+      // Füge einen Marker für diesen Punkt hinzu
+      const marker = L.marker(projectionPoint).addTo(map);
+      markersRef.current.push(marker);
+    }
+  };
 
   return (
     <Box

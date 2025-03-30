@@ -496,16 +496,19 @@ const Map = forwardRef<MapHandle, MapProps>(({
           const addButton = document.getElementById('add-segment-point-btn');
           if (addButton) {
             addButton.addEventListener('click', async () => {
-              // Füge den Punkt zur Route hinzu
-              await addPointToExistingRoute(
-                nearestSegment.routeId,
-                nearestSegment.insertIndex,
-                projectionPoint
-              );
-              
-              // Entferne den Marker und schließe das Popup
-              addPointMarker.remove();
-              map.closePopup();
+              // Stelle sicher, dass nearestSegment nicht null ist
+              if (nearestSegment) {
+                // Füge den Punkt zur Route hinzu
+                await addPointToExistingRoute(
+                  nearestSegment.routeId,
+                  nearestSegment.insertIndex,
+                  projectionPoint
+                );
+                
+                // Entferne den Marker und schließe das Popup
+                addPointMarker.remove();
+                map.closePopup();
+              }
             });
           }
           
@@ -778,7 +781,7 @@ const Map = forwardRef<MapHandle, MapProps>(({
                   <span id="rate-2-${route.id}" style="font-size: 18px; color: #ccc; margin-right: 2px;">★</span>
                   <span id="rate-3-${route.id}" style="font-size: 18px; color: #ccc; margin-right: 2px;">★</span>
                   <span id="rate-4-${route.id}" style="font-size: 18px; color: #ccc; margin-right: 2px;">★</span>
-                  <span id="rate-5-${route.id}" style="font-size: 18px; color: #ccc;">★</span>
+                  <span id="rate-5-${route.id}" style="font-size: 18px; color: #ccc; margin-right: 2px;">★</span>
                 </div>
                 <span id="rating-feedback-${route.id}" style="margin-left: 10px; font-size: 12px;"></span>
               </div>
@@ -849,7 +852,7 @@ const Map = forwardRef<MapHandle, MapProps>(({
                 </div>` : ''}
               
               <!-- Tags anzeigen -->
-              ${route.tags && route.tags.length > 0 ? `
+              ${route.tags ? `
                 <div style="margin-top: 5px; font-size: 13px;">
                   <strong>Tags:</strong> 
                   <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px;">
@@ -878,11 +881,111 @@ const Map = forwardRef<MapHandle, MapProps>(({
             </div>
           `;
           
-          // Zeige Popup mit erweiterten Infos beim Klick an
-          polyline.bindPopup(popupContent);
+          // Zeige Popup mit erweiterten Infos beim Klick an, aber nur wenn nicht im Zeichenmodus
+          if (!isDrawingMode) {
+            polyline.bindPopup(popupContent);
+          } else {
+            // Im Zeichenmodus klickbar machen für die Verbindungsfunktion
+            polyline.on('click', (e) => {
+              if (isDrawingMode) {
+                // Berechne den nächsten Punkt auf der Polylinie (Projektion)
+                const clickPoint = e.latlng;
+                let minDistance = Infinity;
+                let nearestSegment: {
+                  routeId: string;
+                  segment: [L.LatLng, L.LatLng];
+                  insertIndex: number;
+                  distance: number;
+                } | null = null;
+                
+                // Finde das nächstgelegene Segment auf dieser Polyline
+                for (let i = 0; i < latlngs.length - 1; i++) {
+                  const segmentStart = latlngs[i];
+                  const segmentEnd = latlngs[i + 1];
+                  const distance = distanceToSegment(clickPoint, segmentStart, segmentEnd);
+                  
+                  if (distance < minDistance) {
+                    minDistance = distance;
+                    nearestSegment = {
+                      routeId: route.id!,
+                      segment: [segmentStart, segmentEnd] as [L.LatLng, L.LatLng],
+                      insertIndex: i + 1,
+                      distance: distance
+                    };
+                  }
+                }
+                
+                if (nearestSegment && nearestSegment.distance < 0.005) { // 5 Meter Radius
+                  // Berechne den genauen Projektionspunkt
+                  const projectionPoint = calculateProjectionPoint(clickPoint, nearestSegment.segment[0], nearestSegment.segment[1]);
+                  
+                  // Zeige den Add-Point-Marker an der projizierten Position
+                  const addPointMarker = L.marker(projectionPoint, { 
+                    icon: AddPointIcon,
+                    opacity: 0.9
+                  }).addTo(map);
+                  
+                  // Füge das Popup mit beiden Optionen hinzu
+                  addPointMarker.bindPopup(`
+                    <div style="text-align: center; min-width: 220px;">
+                      <h4 style="margin: 5px 0;">Routenpunkt Optionen</h4>
+                      <p style="margin: 5px 0; font-size: 13px;">Was möchtest du an dieser Stelle tun?</p>
+                      <div style="display: flex; justify-content: space-between; margin-top: 10px;">
+                        <button id="add-segment-point-btn" style="background-color: #2196f3; color: white; border: none; border-radius: 4px; padding: 5px 8px; margin: 3px; cursor: pointer; flex: 1; font-size: 12px;">
+                          Punkt zur Route hinzufügen
+                        </button>
+                        <button id="connect-route-btn" style="background-color: #4CAF50; color: white; border: none; border-radius: 4px; padding: 5px 8px; margin: 3px; cursor: pointer; flex: 1; font-size: 12px;">
+                          Route hier verbinden
+                        </button>
+                      </div>
+                    </div>
+                  `).openPopup();
+                  
+                  // Event-Handler für die Buttons im Popup
+                  setTimeout(() => {
+                    // Handler für "Punkt zur Route hinzufügen"
+                    const addButton = document.getElementById('add-segment-point-btn');
+                    if (addButton) {
+                      addButton.addEventListener('click', async () => {
+                        // Stelle sicher, dass nearestSegment nicht null ist
+                        if (nearestSegment) {
+                          // Füge den Punkt zur Route hinzu
+                          await addPointToExistingRoute(
+                            nearestSegment.routeId,
+                            nearestSegment.insertIndex,
+                            projectionPoint
+                          );
+                          
+                          // Entferne den Marker und schließe das Popup
+                          addPointMarker.remove();
+                          map.closePopup();
+                        }
+                      });
+                    }
+                    
+                    // Handler für "Route hier verbinden"
+                    const connectButton = document.getElementById('connect-route-btn');
+                    if (connectButton) {
+                      connectButton.addEventListener('click', () => {
+                        // Verbinde die aktuelle Route mit diesem Punkt
+                        handleRouteSegmentConnection(projectionPoint);
+                        
+                        // Entferne den Marker und schließe das Popup
+                        addPointMarker.remove();
+                        map.closePopup();
+                      });
+                    }
+                  }, 10);
+                }
+                
+                // Verhindere, dass der Klick an die Karte weitergeleitet wird
+                L.DomEvent.stopPropagation(e);
+              }
+            });
+          }
           
           // Event-Handler zum Löschen eines Fahrradwegs hinzufügen
-          if (route.id) {
+          if (route.id && !isDrawingMode) {
             polyline.on('popupopen', () => {
               // Button erst dann suchen, wenn das Popup geöffnet wurde
               setTimeout(() => {
@@ -1064,39 +1167,12 @@ const Map = forwardRef<MapHandle, MapProps>(({
               
               // Füge Klick-Handler hinzu, wenn der Benutzer im Zeichenmodus ist
               marker.on('click', (e) => {
-                if (isDrawingMode) {
-                  // Verhindere Standardverhalten (Propagation zur Karte)
-                  L.DomEvent.stopPropagation(e);
-                  
-                  // Setze diesen Punkt als ersten Punkt der neuen Route
-                  handleExistingPointClick(point);
-                } else {
-                  // Zeige verbessertes Info-Popup für nicht-Zeichenmodus
-                  const ratingStars = route.rating ? '★'.repeat(Math.floor(route.rating)) + (route.rating % 1 ? '½' : '') : '';
-                  const pointPopupContent = `
-                    <div style="min-width: 180px;">
-                      <h4 style="margin: 0 0 5px 0; color: ${getRouteColor(route.id)};">Routenpunkt von:</h4>
-                      <p style="margin: 0 0 8px 0; font-weight: bold;">${route.name || 'Unbenannte Route'}</p>
-                      ${route.rating ? `
-                        <div style="font-size: 12px; margin-bottom: 4px;">
-                          <strong>Bewertung:</strong> 
-                          <span style="color: orange; font-size: 13px;">${ratingStars}</span>
-                          ${route.ratingCount ? `<span> (${route.ratingCount} Bewertung${route.ratingCount !== 1 ? 'en' : ''})</span>` : ''}
-                        </div>` : ''}
-                      ${route.slope ? `
-                        <div style="font-size: 12px;">
-                          <strong>Steigung:</strong> 
-                          <span style="padding: 1px 6px; border-radius: 10px; background-color: ${getSlopeColor(route.slope)}; color: white; font-size: 11px;">
-                            ${formatSlope(route.slope)}
-                          </span>
-                        </div>` : ''}
-                      <div style="margin-top: 8px; font-size: 11px; color: #666;">
-                        Zum Verbinden im Zeichenmodus anklicken
-                      </div>
-                    </div>
-                  `;
-                  marker.bindPopup(pointPopupContent).openPopup();
-                }
+                // Verhindere Standardverhalten (Propagation zur Karte)
+                L.DomEvent.stopPropagation(e);
+                
+                // Diese Marker werden nur im Zeichenmodus angezeigt und dienen nur
+                // zum Verbinden von Routenpunkten. Niemals Popups anzeigen.
+                handleExistingPointClick(point);
               });
               
               // Marker nur zeigen, wenn Zeichenmodus aktiv ist

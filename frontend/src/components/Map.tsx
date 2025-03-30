@@ -48,7 +48,7 @@ const MIN_ZOOM_LEVEL_ROUTE_POINTS = 14; // Routenpunkte werden erst ab Zoom-Leve
 
 let DefaultIcon = L.icon({
   iconUrl: icon,
-  shadowUrl: iconShadow,
+  shadowUrl: '', // Schatten entfernen
   iconSize: [25, 41],
   iconAnchor: [12, 41]
 });
@@ -56,7 +56,7 @@ let DefaultIcon = L.icon({
 // Kleinerer, zusätzlicher Icon für Routenpunkte
 let RoutePointIcon = L.icon({
   iconUrl: icon,
-  shadowUrl: '', // Entferne Schatten vollständig
+  shadowUrl: '', // Schatten entfernen
   iconSize: [15, 25],
   iconAnchor: [7, 25]
 });
@@ -424,38 +424,22 @@ const Map = forwardRef<MapHandle, MapProps>(({
     const map = mapRef.current;
     if (!map) return;
     
-    // Erstelle einen neuen Punkt an der geklickten Position
+    // Prüfe, ob der Klick von einem UI-Element (wie dem Speichern-Button) stammt
+    // Wenn das Event ein originalEvent enthält und dieses eine "button"-Eigenschaft hat,
+    // dann ist es höchstwahrscheinlich ein Klick auf ein UI-Element
+    const eventTarget = e.originalEvent?.target as HTMLElement;
+    if (eventTarget && (
+      eventTarget.tagName === 'BUTTON' || 
+      eventTarget.closest('button') || 
+      eventTarget.classList.contains('MuiFab-root') ||
+      eventTarget.closest('.MuiFab-root')
+    )) {
+      console.log('Klick auf Button erkannt, ignoriere für Routenpunkte');
+      return;
+    }
+    
     const newPoint = e.latlng;
-    
-    // Im Fahrradständer-Modus
-    if (isBikeStandMode) {
-      handleBikeStandClick(e);
-      return;
-    }
-    
-    // Im Nextbike-Modus
-    if (isNextBikeMode) {
-      handleNextbikeClick(e);
-      return;
-    }
-    
-    // Im Reparaturstations-Modus
-    if (isRepairStationMode) {
-      handleRepairStationClick(e);
-      return;
-    }
-    
-    // Im Ladestations-Modus
-    if (isChargingStationMode) {
-      handleChargingStationClick(e);
-      return;
-    }
-    
-    // Im POI-Modus
-    if (isPoiMode) {
-      handlePoiClick(e);
-      return;
-    }
+    console.log('Map clicked at:', newPoint);
     
     // Im Zeichenmodus
     if (isDrawingMode) {
@@ -480,12 +464,42 @@ const Map = forwardRef<MapHandle, MapProps>(({
       if (nearestSegment && nearestSegment.distance < 0.005) {
         console.log('Clicked near route segment, distance:', nearestSegment.distance);
         
-        // Statt Popup anzeigen, sofort einen Punkt hinzufügen, wenn im Zeichenmodus
-        addPointToExistingRoute(
+        // Zeige den Add-Point-Marker an
+        const addPointMarker = L.marker(newPoint, { 
+          icon: AddPointIcon,
+          opacity: 0.9
+        }).addTo(map);
+        
+        // Füge das Popup mit der Funktion zum Hinzufügen des Punktes hinzu
+        addPointMarker.bindPopup(`
+          <div style="text-align: center;">
+            <h4 style="margin: 5px 0;">Routenpunkt hinzufügen</h4>
+            <p style="margin: 5px 0;">Möchtest du an dieser Stelle einen Routenpunkt hinzufügen?</p>
+            <button id="add-point-btn" style="background-color: #2196f3; color: white; border: none; border-radius: 4px; padding: 5px 12px; margin-top: 5px; cursor: pointer;">
+              Punkt hinzufügen
+            </button>
+          </div>
+        `).openPopup();
+        
+        // Event-Handler für den Button im Popup
+        setTimeout(() => {
+          const addButton = document.getElementById('add-point-btn');
+          if (addButton) {
+            addButton.addEventListener('click', async () => {
+              // Füge den Punkt zur Route hinzu
+              await addPointToExistingRoute(
                 nearestSegment.routeId,
                 nearestSegment.insertIndex,
                 newPoint
               );
+              
+              // Entferne den Marker und schließe das Popup
+              addPointMarker.remove();
+              map.closePopup();
+            });
+          }
+        }, 10);
+        
         return;
       }
       
@@ -493,15 +507,12 @@ const Map = forwardRef<MapHandle, MapProps>(({
       const newPoints = [...points, newPoint];
       setPoints(newPoints);
 
-      // Füge einen Marker für diesen Punkt hinzu
-      const marker = L.marker(newPoint).addTo(map);
-      markersRef.current.push(marker);
-      
-      // Aktualisiere die Polyline
+      // Remove existing polyline
       if (polylineRef.current) {
         polylineRef.current.remove();
       }
 
+      // Draw new polyline
       const polyline = L.polyline(newPoints, {
         color: 'blue',
         weight: 4,
@@ -510,13 +521,9 @@ const Map = forwardRef<MapHandle, MapProps>(({
 
       polylineRef.current = polyline;
 
-      // Wenn die Route mindestens 2 Punkte hat, kann sie abgeschlossen werden
-      if (onRouteComplete && newPoints.length >= 2) {
-        onRouteComplete(newPoints);
-        
-        // Bereinige die Karte nach dem Speichern der Route
-        clearRoute();
-      }
+      // Add marker for each point
+      const marker = L.marker(newPoint).addTo(map);
+      markersRef.current.push(marker);
     }
   }
 
@@ -850,58 +857,6 @@ const Map = forwardRef<MapHandle, MapProps>(({
           
           // Zeige Popup mit erweiterten Infos beim Klick an
           polyline.bindPopup(popupContent);
-          
-          // Im Zeichenmodus die Popup-Anzeige verhindern und stattdessen Pin platzieren
-          polyline.on('click', (e) => {
-            if (isDrawingMode) {
-              // Klickevent stoppen, damit kein Popup geöffnet wird
-              e.originalEvent.stopPropagation();
-              L.DomEvent.stop(e);
-              
-              console.log('Route im Zeichenmodus angeklickt:', route.id);
-              
-              // Neuen Punkt an der geklickten Position erstellen
-              const clickedPoint = e.latlng;
-              
-              // Wenn bereits Punkte vorhanden sind, füge den neuen Punkt zur aktuellen Route hinzu
-              if (points.length > 0) {
-                const newPoints = [...points, clickedPoint];
-                setPoints(newPoints);
-                
-                // Füge einen Marker für diesen Punkt hinzu
-                const map = mapRef.current;
-                if (map) {
-                  const marker = L.marker(clickedPoint).addTo(map);
-                  markersRef.current.push(marker);
-                  
-                  // Aktualisiere die Polyline
-                  if (polylineRef.current) {
-                    polylineRef.current.remove();
-                  }
-                  
-                  const polyline = L.polyline(newPoints, {
-                    color: 'blue',
-                    weight: 4,
-                    opacity: 0.7
-                  }).addTo(map);
-                  
-                  polylineRef.current = polyline;
-                }
-              } else {
-                // Wenn noch keine Punkte vorhanden sind, starte eine neue Route von diesem Punkt
-                setPoints([clickedPoint]);
-                
-                // Füge einen Marker für diesen Punkt hinzu
-                const map = mapRef.current;
-                if (map) {
-                  const marker = L.marker(clickedPoint).addTo(map);
-                  markersRef.current.push(marker);
-                }
-              }
-              
-              return false;
-            }
-          });
           
           // Event-Handler zum Löschen eines Fahrradwegs hinzufügen
           if (route.id) {
@@ -2474,32 +2429,80 @@ const Map = forwardRef<MapHandle, MapProps>(({
         const features = [];
         if (station.hasAirPump) features.push('Luftpumpe');
         if (station.hasTools) features.push('Werkzeug');
-        if (station.isPublic) features.push('Öffentlich zugänglich');
         
         if (features.length > 0) {
           popupContent += `<p><strong>Ausstattung:</strong> ${features.join(', ')}</p>`;
         }
         
+        // Öffnungszeiten anzeigen, falls vorhanden
         if (station.openingHours) {
           popupContent += `<p><strong>Öffnungszeiten:</strong> ${station.openingHours}</p>`;
         }
         
-        if (station.rating) {
-          const ratingStars = '★'.repeat(Math.floor(station.rating)) + (station.rating % 1 ? '½' : '');
+        // Erstellt von
+        const createdByText = station.createdBy === 'admin' ? 'Administrator' : 'Benutzer';
+        popupContent += `<p style="font-size: 0.8em; color: #666;">Hinzugefügt von ${createdByText}</p>`;
+        
+        // Löschbutton hinzufügen, wenn der aktuelle Benutzer der Ersteller ist oder ein Admin
+        const currentUser = auth.currentUser;
+        if (currentUser && (currentUser.uid === station.createdBy || currentUser.email === ADMIN_EMAIL)) {
           popupContent += `
-            <div style="font-size: 12px; margin-bottom: 4px;">
-              <strong>Bewertung:</strong> 
-              <span style="color: orange; font-size: 13px;">${ratingStars}</span>
+            <div style="text-align: right; margin-top: 10px;">
+              <button 
+                class="repair-delete-button" 
+                style="background-color: #f44336; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;"
+                data-repair-id="${station.id}">
+                Löschen${currentUser.email === ADMIN_EMAIL && currentUser.uid !== station.createdBy ? ' (Admin)' : ''}
+              </button>
             </div>
           `;
         }
         
-        popupContent += `
-          </div>
-        `;
+        popupContent += '</div>';
         
         // Füge das Popup hinzu
         marker.bindPopup(popupContent);
+        
+        // Event-Listener für den Lösch-Button hinzufügen, wenn das Popup geöffnet wird
+        marker.on('popupopen', () => {
+          const deleteButton = document.querySelector(`.repair-delete-button[data-repair-id="${station.id}"]`);
+          if (deleteButton) {
+            deleteButton.addEventListener('click', async () => {
+              if (window.confirm('Möchtest du diese Reparaturstation wirklich löschen?')) {
+                try {
+                  // Lösche die Reparaturstation aus der Datenbank
+                  await deleteRepairStation(station.id);
+                  
+                  // Schließe das Popup und entferne den Marker sofort
+                  marker.closePopup();
+                  marker.remove();
+                  
+                  // Entferne den Marker aus der Referenzliste
+                  repairStationMarkersRef.current = repairStationMarkersRef.current.filter(m => m !== marker);
+                  
+                  // Entferne die Station aus dem State
+                  setRepairStations(currentStations => currentStations.filter(s => s.id !== station.id));
+                  
+                  // Erfolgsmeldung anzeigen
+                  window.dispatchEvent(new CustomEvent('showNotification', { 
+                    detail: { 
+                      message: 'Reparaturstation erfolgreich gelöscht', 
+                      severity: 'success' 
+                    } 
+                  }));
+                } catch (error) {
+                  console.error('Fehler beim Löschen der Reparaturstation:', error);
+                  window.dispatchEvent(new CustomEvent('showNotification', { 
+                    detail: { 
+                      message: 'Fehler beim Löschen der Reparaturstation', 
+                      severity: 'error' 
+                    } 
+                  }));
+                }
+              }
+            });
+          }
+        });
         
         // Speichere den Marker für späteres Entfernen
         repairStationMarkersRef.current.push(marker);

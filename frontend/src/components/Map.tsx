@@ -20,7 +20,10 @@ import {
   RepairStation,
   ChargingStation,
   POI,
-  deletePoi
+  deletePoi,
+  deleteRepairStation,
+  deleteChargingStation,
+  deleteNextbikeStation
 } from '../services/poiService';
 import MapLegend from './MapLegend';
 import SaveIcon from '@mui/icons-material/Save';
@@ -2053,16 +2056,16 @@ const Map = forwardRef<MapHandle, MapProps>(({
           `;
         }
         
-        // Füge Lösch-Button hinzu, wenn der aktuelle Benutzer der Ersteller ist
+        // Füge Lösch-Button hinzu, wenn der aktuelle Benutzer der Ersteller ist oder ein Admin
         const currentUser = auth.currentUser;
-        if (currentUser && currentUser.uid === bikeStand.createdBy) {
+        if (currentUser && (currentUser.uid === bikeStand.createdBy || currentUser.email === ADMIN_EMAIL)) {
           popupContent += `
             <div style="text-align: right; margin-top: 10px;">
               <button 
                 class="bikestand-delete-button" 
                 style="background-color: #f44336; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;"
                 data-bikestand-id="${bikeStand.id}">
-                Löschen
+                Löschen${currentUser.email === ADMIN_EMAIL && currentUser.uid !== bikeStand.createdBy ? ' (Admin)' : ''}
               </button>
             </div>
           `;
@@ -2213,6 +2216,76 @@ const Map = forwardRef<MapHandle, MapProps>(({
           `;
           
           marker.bindPopup(popupContent);
+          
+          // Event-Listener für den Lösch-Button (falls Admin oder Ersteller)
+          marker.on('popupopen', () => {
+            // Füge Lösch-Button im Popup hinzu, wenn der aktuelle Benutzer der Ersteller ist oder ein Admin
+            const currentUser = auth.currentUser;
+            if (currentUser && (currentUser.uid === station.createdBy || currentUser.email === ADMIN_EMAIL)) {
+              // Finde den Popup-Container
+              const popupContainer = document.querySelector('.leaflet-popup-content');
+              if (popupContainer) {
+                // Prüfe, ob bereits ein Löschbutton vorhanden ist
+                if (!popupContainer.querySelector('.nextbike-delete-button')) {
+                  // Erstelle den Löschbutton
+                  const deleteButtonDiv = document.createElement('div');
+                  deleteButtonDiv.style.textAlign = 'right';
+                  deleteButtonDiv.style.marginTop = '10px';
+                  
+                  const deleteButton = document.createElement('button');
+                  deleteButton.className = 'nextbike-delete-button';
+                  deleteButton.setAttribute('data-nextbike-id', station.id);
+                  deleteButton.style.backgroundColor = '#f44336';
+                  deleteButton.style.color = 'white';
+                  deleteButton.style.border = 'none';
+                  deleteButton.style.padding = '5px 10px';
+                  deleteButton.style.borderRadius = '4px';
+                  deleteButton.style.cursor = 'pointer';
+                  deleteButton.innerText = `Löschen${currentUser.email === ADMIN_EMAIL && currentUser.uid !== station.createdBy ? ' (Admin)' : ''}`;
+                  
+                  // Füge den Button zum Container hinzu
+                  deleteButtonDiv.appendChild(deleteButton);
+                  popupContainer.appendChild(deleteButtonDiv);
+                  
+                  // Event-Listener für den Löschbutton
+                  deleteButton.addEventListener('click', async () => {
+                    if (window.confirm('Möchtest du diese Nextbike-Station wirklich löschen?')) {
+                      try {
+                        // Lösche die Nextbike-Station aus der Datenbank
+                        await deleteNextbikeStation(station.id);
+                        
+                        // Schließe das Popup und entferne den Marker sofort
+                        marker.closePopup();
+                        marker.remove();
+                        
+                        // Entferne den Marker aus der Referenzliste
+                        nextbikeMarkersRef.current = nextbikeMarkersRef.current.filter(m => m !== marker);
+                        
+                        // Entferne die Station aus dem State
+                        setNextbikeStations(currentStations => currentStations.filter(s => s.id !== station.id));
+                        
+                        // Erfolgsmeldung anzeigen
+                        window.dispatchEvent(new CustomEvent('showNotification', { 
+                          detail: { 
+                            message: 'Nextbike-Station erfolgreich gelöscht', 
+                            severity: 'success' 
+                          } 
+                        }));
+                      } catch (error) {
+                        console.error('Fehler beim Löschen der Nextbike-Station:', error);
+                        window.dispatchEvent(new CustomEvent('showNotification', { 
+                          detail: { 
+                            message: 'Fehler beim Löschen der Nextbike-Station', 
+                            severity: 'error' 
+                          } 
+                        }));
+                      }
+                    }
+                  });
+                }
+              }
+            }
+          });
           
           // Add marker to the reference array
           nextbikeMarkersRef.current.push(marker);
@@ -2427,12 +2500,66 @@ const Map = forwardRef<MapHandle, MapProps>(({
           `;
         }
         
-        popupContent += `
-          </div>
-        `;
+        // Füge Lösch-Button hinzu, wenn der aktuelle Benutzer der Ersteller ist oder ein Admin
+        const currentUser = auth.currentUser;
+        if (currentUser && (currentUser.uid === station.createdBy || currentUser.email === ADMIN_EMAIL)) {
+          popupContent += `
+            <div style="text-align: right; margin-top: 10px;">
+              <button 
+                class="charging-delete-button" 
+                style="background-color: #f44336; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;"
+                data-charging-id="${station.id}">
+                Löschen${currentUser.email === ADMIN_EMAIL && currentUser.uid !== station.createdBy ? ' (Admin)' : ''}
+              </button>
+            </div>
+          `;
+        }
+        
+        popupContent += '</div>';
         
         // Füge das Popup hinzu
         marker.bindPopup(popupContent);
+        
+        // Event-Listener für den Lösch-Button
+        marker.on('popupopen', () => {
+          const deleteButton = document.querySelector(`.charging-delete-button[data-charging-id="${station.id}"]`);
+          if (deleteButton) {
+            deleteButton.addEventListener('click', async () => {
+              if (window.confirm('Möchtest du diese Ladestation wirklich löschen?')) {
+                try {
+                  // Lösche die Ladestation aus der Datenbank
+                  await deleteChargingStation(station.id);
+                  
+                  // Schließe das Popup und entferne den Marker sofort
+                  marker.closePopup();
+                  marker.remove();
+                  
+                  // Entferne den Marker aus der Referenzliste
+                  chargingStationMarkersRef.current = chargingStationMarkersRef.current.filter(m => m !== marker);
+                  
+                  // Entferne die Station aus dem State
+                  setChargingStations(currentStations => currentStations.filter(s => s.id !== station.id));
+                  
+                  // Erfolgsmeldung anzeigen
+                  window.dispatchEvent(new CustomEvent('showNotification', { 
+                    detail: { 
+                      message: 'Ladestation erfolgreich gelöscht', 
+                      severity: 'success' 
+                    } 
+                  }));
+                } catch (error) {
+                  console.error('Fehler beim Löschen der Ladestation:', error);
+                  window.dispatchEvent(new CustomEvent('showNotification', { 
+                    detail: { 
+                      message: 'Fehler beim Löschen der Ladestation', 
+                      severity: 'error' 
+                    } 
+                  }));
+                }
+              }
+            });
+          }
+        });
         
         // Speichere den Marker für späteres Entfernen
         chargingStationMarkersRef.current.push(marker);
@@ -2615,7 +2742,6 @@ const Map = forwardRef<MapHandle, MapProps>(({
         });
         
         // Erstelle den Marker mit dem benutzerdefinierten Icon
-        // Füge den Marker zur Layer-Gruppe hinzu, nicht direkt zur Karte
         const marker = L.marker(position, { icon: poiIcon });
         
         // Den Marker zur passenden Layer-Gruppe hinzufügen
@@ -2626,8 +2752,102 @@ const Map = forwardRef<MapHandle, MapProps>(({
         // Speichere den Marker für späteres Entfernen
         poiMarkersRef.current.push(marker);
         
-        // Popup-Inhalt und Event-Listener wie bisher...
-        // ... rest of the code for popups etc.
+        // Popup-Inhalt erstellen
+        let popupContent = `
+          <div style="min-width: 180px;">
+            <h4 style="margin: 0 0 5px 0; color: #f44336;">${poi.name || 'Interessanter Ort'}</h4>
+        `;
+        
+        if (poi.description) {
+          popupContent += `<p><strong>Beschreibung:</strong> ${poi.description}</p>`;
+        }
+        
+        if (poi.category) {
+          popupContent += `<p><strong>Kategorie:</strong> ${poi.category}</p>`;
+        }
+        
+        if (poi.website) {
+          popupContent += `<p><strong>Website:</strong> <a href="${poi.website}" target="_blank">${poi.website}</a></p>`;
+        }
+        
+        if (poi.phoneNumber) {
+          popupContent += `<p><strong>Telefon:</strong> ${poi.phoneNumber}</p>`;
+        }
+        
+        if (poi.openingHours) {
+          popupContent += `<p><strong>Öffnungszeiten:</strong> ${poi.openingHours}</p>`;
+        }
+        
+        if (poi.rating) {
+          const ratingStars = '★'.repeat(Math.floor(poi.rating)) + (poi.rating % 1 ? '½' : '');
+          popupContent += `
+            <div style="font-size: 12px; margin-bottom: 4px;">
+              <strong>Bewertung:</strong> 
+              <span style="color: orange; font-size: 13px;">${ratingStars}</span>
+            </div>
+          `;
+        }
+        
+        // Füge Lösch-Button hinzu, wenn der aktuelle Benutzer der Ersteller ist oder ein Admin
+        const currentUser = auth.currentUser;
+        if (currentUser && (currentUser.uid === poi.createdBy || currentUser.email === ADMIN_EMAIL)) {
+          popupContent += `
+            <div style="text-align: right; margin-top: 10px;">
+              <button 
+                class="poi-delete-button" 
+                style="background-color: #f44336; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;"
+                data-poi-id="${poi.id}">
+                Löschen${currentUser.email === ADMIN_EMAIL && currentUser.uid !== poi.createdBy ? ' (Admin)' : ''}
+              </button>
+            </div>
+          `;
+        }
+        
+        popupContent += '</div>';
+        
+        // Füge das Popup hinzu
+        marker.bindPopup(popupContent);
+        
+        // Event-Listener für den Lösch-Button
+        marker.on('popupopen', () => {
+          const deleteButton = document.querySelector(`.poi-delete-button[data-poi-id="${poi.id}"]`);
+          if (deleteButton) {
+            deleteButton.addEventListener('click', async () => {
+              if (window.confirm('Möchtest du diesen POI wirklich löschen?')) {
+                try {
+                  // Lösche den POI aus der Datenbank
+                  await deletePoi(poi.id);
+                  
+                  // Schließe das Popup und entferne den Marker sofort
+                  marker.closePopup();
+                  marker.remove();
+                  
+                  // Entferne den Marker aus der Referenzliste
+                  poiMarkersRef.current = poiMarkersRef.current.filter(m => m !== marker);
+                  
+                  // Entferne den POI aus dem State
+                  setPois(currentPois => currentPois.filter(p => p.id !== poi.id));
+                  
+                  // Erfolgsmeldung anzeigen
+                  window.dispatchEvent(new CustomEvent('showNotification', { 
+                    detail: { 
+                      message: 'POI erfolgreich gelöscht', 
+                      severity: 'success' 
+                    } 
+                  }));
+                } catch (error) {
+                  console.error('Fehler beim Löschen des POI:', error);
+                  window.dispatchEvent(new CustomEvent('showNotification', { 
+                    detail: { 
+                      message: 'Fehler beim Löschen des POI', 
+                      severity: 'error' 
+                    } 
+                  }));
+                }
+              }
+            });
+          }
+        });
       });
     } catch (error) {
       console.error('Error fetching and displaying POIs:', error);

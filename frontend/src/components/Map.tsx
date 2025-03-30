@@ -769,6 +769,73 @@ const Map = forwardRef<MapHandle, MapProps>(({
                   </span>
                 </div>` : ''}
               
+              <!-- Zusätzliche Routeninformationen -->
+              ${route.traffic !== undefined ? `
+                <div style="margin-top: 5px; font-size: 13px;">
+                  <strong>Verkehrsdichte:</strong> 
+                  <span style="padding: 2px 8px; border-radius: 10px; background-color: ${
+                    route.traffic <= 1 ? '#4CAF50' :
+                    route.traffic <= 2 ? '#8BC34A' : 
+                    route.traffic <= 3 ? '#FFC107' : 
+                    route.traffic <= 4 ? '#FF9800' : '#FF5722'
+                  }; color: white; font-size: 12px;">
+                    ${
+                      route.traffic <= 1 ? 'Sehr gering' :
+                      route.traffic <= 2 ? 'Gering' : 
+                      route.traffic <= 3 ? 'Mittel' : 
+                      route.traffic <= 4 ? 'Hoch' : 'Sehr hoch'
+                    }
+                  </span>
+                </div>` : ''}
+              
+              ${route.roadQuality !== undefined ? `
+                <div style="margin-top: 5px; font-size: 13px;">
+                  <strong>Straßenqualität:</strong> 
+                  <span style="padding: 2px 8px; border-radius: 10px; background-color: ${
+                    route.roadQuality >= 4 ? '#4CAF50' :
+                    route.roadQuality >= 3 ? '#8BC34A' : 
+                    route.roadQuality >= 2 ? '#FFC107' : 
+                    route.roadQuality >= 1 ? '#FF9800' : '#FF5722'
+                  }; color: white; font-size: 12px;">
+                    ${
+                      route.roadQuality >= 4 ? 'Sehr gut' :
+                      route.roadQuality >= 3 ? 'Gut' : 
+                      route.roadQuality >= 2 ? 'Mittel' : 
+                      route.roadQuality >= 1 ? 'Schlecht' : 'Sehr schlecht'
+                    }
+                  </span>
+                </div>` : ''}
+              
+              ${route.scenery !== undefined ? `
+                <div style="margin-top: 5px; font-size: 13px;">
+                  <strong>Umgebung:</strong> 
+                  <span style="padding: 2px 8px; border-radius: 10px; background-color: ${
+                    route.scenery >= 4 ? '#4CAF50' :
+                    route.scenery >= 3 ? '#8BC34A' : 
+                    route.scenery >= 2 ? '#FFC107' : 
+                    route.scenery >= 1 ? '#FF9800' : '#FF5722'
+                  }; color: white; font-size: 12px;">
+                    ${
+                      route.scenery >= 4 ? 'Sehr schön' :
+                      route.scenery >= 3 ? 'Schön' : 
+                      route.scenery >= 2 ? 'Durchschnittlich' : 
+                      route.scenery >= 1 ? 'Wenig attraktiv' : 'Nicht attraktiv'
+                    }
+                  </span>
+                </div>` : ''}
+              
+              ${route.tags && route.tags.length > 0 ? `
+                <div style="margin-top: 5px; font-size: 13px;">
+                  <strong>Tags:</strong> 
+                  <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px;">
+                    ${route.tags.map(tag => `
+                      <span style="background-color: #e0e0e0; padding: 2px 6px; border-radius: 10px; font-size: 11px;">
+                        ${tag}
+                      </span>
+                    `).join('')}
+                  </div>
+                </div>` : ''}
+                
                 <hr style="border: 0; border-top: 1px solid #eee; margin: 8px 0;">
               <div style="margin-top: 10px; display: flex; justify-content: ${route.userId === auth.currentUser?.uid ? 'space-between' : 'center'};">
                 <!-- Bearbeiten-Button für alle Benutzer -->

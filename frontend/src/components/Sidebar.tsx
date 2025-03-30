@@ -163,15 +163,33 @@ const Sidebar: React.FC = () => {
       }
     };
     
-    // Registriere den Event-Listener
+    // Event-Listener für das Bearbeiten von Routen aus der Karte heraus
+    const handleEditRoute = (event: any) => {
+      const { routeId } = event.detail;
+      console.log('Route bearbeiten angefordert:', routeId);
+      
+      // Finde die Route in allen möglichen Routen-Listen
+      const route = [...routes, ...navRoutes, ...publicRoutes].find(r => r.id === routeId);
+      
+      if (route) {
+        // Öffne den Bearbeitungs-Dialog mit der gefundenen Route
+        openEditDialog(route);
+      } else {
+        console.error('Route nicht gefunden:', routeId);
+      }
+    };
+    
+    // Registriere die Event-Listener
     window.addEventListener('navigationRouteSaved', handleNavigationRouteSaved);
+    window.addEventListener('editRoute', handleEditRoute);
     
     return () => {
       unsubscribe();
       // Event-Listener entfernen
       window.removeEventListener('navigationRouteSaved', handleNavigationRouteSaved);
+      window.removeEventListener('editRoute', handleEditRoute);
     };
-  }, []);
+  }, [routes, navRoutes, publicRoutes]); // Abhängigkeiten aktualisiert
 
   // Fahrradwege des Benutzers abrufen
   const fetchUserRoutes = async (userId: string) => {

@@ -531,15 +531,11 @@ const Sidebar: React.FC = () => {
               : route
           )
         );
-        
-        // Zeige erfolgreiches Speichern als Alert an
-        alert('Änderungen wurden erfolgreich gespeichert!');
       }
       
       closeEditDialog();
     } catch (error) {
       console.error('Error saving changes:', error);
-      alert('Fehler beim Speichern der Änderungen. Bitte versuche es erneut.');
     }
   };
 

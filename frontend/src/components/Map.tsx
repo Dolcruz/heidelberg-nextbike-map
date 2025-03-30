@@ -2168,10 +2168,7 @@ const Map = forwardRef<MapHandle, MapProps>(({
         // Custom Icon für Fahrradständer
         const bikeStandIcon = L.divIcon({
           className: 'custom-div-icon',
-          html: `<div style="background-color: #4CAF50; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; display: flex; justify-content: center; align-items: center;">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14px" height="14px" fill="white">
-                    <path d="M15.5,5.5c1.1,0,2-0.9,2-2s-0.9-2-2-2s-2,0.9-2,2S14.4,5.5,15.5,5.5z M5,12c-2.8,0-5,2.2-5,5s2.2,5,5,5s5-2.2,5-5 S7.8,12,5,12z M5,20.5c-1.9,0-3.5-1.6-3.5-3.5s1.6-3.5,3.5-3.5s3.5,1.6,3.5,3.5S6.9,20.5,5,20.5z M19,12c-2.8,0-5,2.2-5,5 s2.2,5,5,5s5-2.2,5-5S21.8,12,19,12z M19,20.5c-1.9,0-3.5-1.6-3.5-3.5s1.6-3.5,3.5-3.5s3.5,1.6,3.5,3.5S20.9,20.5,19,20.5z M12,10h-2v2H9v-2H7v2H6v-2H4v2H3V8h2V6h2v2h2V6h2v2h2v8h-1V10z"/>
-                  </svg>
+          html: `<div style="background-color: #4CAF50; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;">
                 </div>`,
           iconSize: [24, 24],
           iconAnchor: [12, 12]

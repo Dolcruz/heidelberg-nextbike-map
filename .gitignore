@@ -67,3 +67,9 @@ node_modules/
 
 # dataconnect generated files
 .dataconnect
+
+# Umgebungsdateien
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

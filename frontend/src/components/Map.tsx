@@ -737,8 +737,8 @@ const Map = forwardRef<MapHandle, MapProps>(({
                 <span><strong>Länge:</strong> ${calculateRouteLength(route.points).toFixed(2)} km</span>
                 <span><strong>Erstellt:</strong> ${route.createdAt.toLocaleDateString()}</span>
               </div>
-              <div style="margin-top: 8px; font-size: 13px;">
-                <strong>Bewertung:</strong> 
+                <div style="margin-top: 8px; font-size: 13px;">
+                  <strong>Bewertung:</strong> 
                 ${route.rating ? `
                   <span style="color: orange; font-size: 14px;">${ratingStars}</span> 
                   <span>(${route.rating})</span>
@@ -766,7 +766,7 @@ const Map = forwardRef<MapHandle, MapProps>(({
                   </span>
                 </div>` : ''}
               
-              <hr style="border: 0; border-top: 1px solid #eee; margin: 8px 0;">
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 8px 0;">
               <div style="margin-top: 10px; display: flex; justify-content: ${route.userId === auth.currentUser?.uid ? 'space-between' : 'center'};">
                 <!-- Bearbeiten-Button für alle Benutzer -->
                 <button id="edit-route-${route.id}" style="background-color: #1976d2; color: white; border: none; border-radius: 4px; padding: 5px 12px; cursor: pointer; font-size: 12px;">
@@ -778,7 +778,7 @@ const Map = forwardRef<MapHandle, MapProps>(({
                   <button id="delete-route-${route.id}" style="background-color: #ff4d4f; color: white; border: none; border-radius: 4px; padding: 5px 12px; cursor: pointer; font-size: 12px;">
                     Löschen
                   </button>
-                ` : ''}
+              ` : ''}
               </div>
             </div>
           `;
@@ -793,32 +793,32 @@ const Map = forwardRef<MapHandle, MapProps>(({
               setTimeout(() => {
                 // Event-Handler für Löschbutton (nur wenn Nutzer der Ersteller ist)
                 if (route.userId === auth.currentUser?.uid) {
-                  const deleteButton = document.getElementById(`delete-route-${route.id}`);
-                  if (deleteButton) {
-                    deleteButton.addEventListener('click', async () => {
-                      try {
-                        // Fahrradweg aus der Datenbank löschen
+                const deleteButton = document.getElementById(`delete-route-${route.id}`);
+                if (deleteButton) {
+                  deleteButton.addEventListener('click', async () => {
+                    try {
+                      // Fahrradweg aus der Datenbank löschen
                         await deleteRoute(route.id!, auth.currentUser?.uid, auth.currentUser?.email === 'pfistererfalk@gmail.com');
-                        
-                        // Fahrradweg von der Karte entfernen
-                        if (savedRoutesLayersRef.current[route.id!]) {
-                          savedRoutesLayersRef.current[route.id!].remove();
-                          delete savedRoutesLayersRef.current[route.id!];
-                        }
-                        
-                        // Liste der gespeicherten Routen aktualisieren
-                        if (auth.currentUser) {
-                          fetchUserRoutes(auth.currentUser.uid);
-                        }
-                        
-                        // Popup schließen
-                        mapRef.current?.closePopup();
-                        
-                        // Erfolgsbenachrichtigung anzeigen
-                        showNotification('Fahrradweg wurde gelöscht', 'success');
-                      } catch (error) {
-                        console.error('Fehler beim Löschen des Fahrradwegs:', error);
-                        showNotification('Fehler beim Löschen des Fahrradwegs', 'error');
+                      
+                      // Fahrradweg von der Karte entfernen
+                      if (savedRoutesLayersRef.current[route.id!]) {
+                        savedRoutesLayersRef.current[route.id!].remove();
+                        delete savedRoutesLayersRef.current[route.id!];
+                      }
+                      
+                      // Liste der gespeicherten Routen aktualisieren
+                      if (auth.currentUser) {
+                        fetchUserRoutes(auth.currentUser.uid);
+                      }
+                      
+                      // Popup schließen
+                      mapRef.current?.closePopup();
+                      
+                      // Erfolgsbenachrichtigung anzeigen
+                      showNotification('Fahrradweg wurde gelöscht', 'success');
+                    } catch (error) {
+                      console.error('Fehler beim Löschen des Fahrradwegs:', error);
+                      showNotification('Fehler beim Löschen des Fahrradwegs', 'error');
                       }
                     });
                   }
@@ -1998,13 +1998,13 @@ const Map = forwardRef<MapHandle, MapProps>(({
         // Custom Icon für Fahrradständer
         const bikeStandIcon = L.divIcon({
           className: 'custom-div-icon',
-          html: `<div style="background-color: #4CAF50; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; display: flex; justify-content: center; align-items: center;">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12" fill="white">
+          html: `<div style="background-color: #4CAF50; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; display: flex; justify-content: center; align-items: center;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14px" height="14px" fill="white">
                     <path d="M15.5,5.5c1.1,0,2-0.9,2-2s-0.9-2-2-2s-2,0.9-2,2S14.4,5.5,15.5,5.5z M5,12c-2.8,0-5,2.2-5,5s2.2,5,5,5s5-2.2,5-5 S7.8,12,5,12z M5,20.5c-1.9,0-3.5-1.6-3.5-3.5s1.6-3.5,3.5-3.5s3.5,1.6,3.5,3.5S6.9,20.5,5,20.5z M19,12c-2.8,0-5,2.2-5,5 s2.2,5,5,5s5-2.2,5-5S21.8,12,19,12z M19,20.5c-1.9,0-3.5-1.6-3.5-3.5s1.6-3.5,3.5-3.5s3.5,1.6,3.5,3.5S20.9,20.5,19,20.5z M12,10h-2v2H9v-2H7v2H6v-2H4v2H3V8h2V6h2v2h2V6h2v2h2v8h-1V10z"/>
                   </svg>
                 </div>`,
-          iconSize: [20, 20],
-          iconAnchor: [10, 10]
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
         });
         
         // Erstelle den Marker und füge ihn zur Layer-Gruppe hinzu
@@ -2256,13 +2256,13 @@ const Map = forwardRef<MapHandle, MapProps>(({
         // Erstelle ein benutzerdefiniertes Icon für die Reparaturstation
         const repairIcon = L.divIcon({
           className: 'repair-icon',
-          html: `<div style="background-color: #ff9800; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; display: flex; justify-content: center; align-items: center;">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="10" height="10" fill="white">
+          html: `<div style="background-color: #ff9800; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; display: flex; justify-content: center; align-items: center;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14px" height="14px" fill="white">
                     <path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/>
                   </svg>
                 </div>`,
-          iconSize: [18, 18],
-          iconAnchor: [9, 9]
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
         });
         
         // Erstelle den Marker mit dem benutzerdefinierten Icon
@@ -2356,13 +2356,13 @@ const Map = forwardRef<MapHandle, MapProps>(({
         // Erstelle ein benutzerdefiniertes Icon für die E-Bike-Ladestation
         const chargingIcon = L.divIcon({
           className: 'charging-icon',
-          html: `<div style="background-color: #9c27b0; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; display: flex; justify-content: center; align-items: center;">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="10" height="10" fill="white">
+          html: `<div style="background-color: #9c27b0; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; display: flex; justify-content: center; align-items: center;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14px" height="14px" fill="white">
                     <path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4zM11 20v-5.5H9L13 7v5.5h2L11 20z"/>
                   </svg>
                 </div>`,
-          iconSize: [18, 18],
-          iconAnchor: [9, 9]
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
         });
         
         // Erstelle den Marker mit dem benutzerdefinierten Icon
@@ -2605,13 +2605,13 @@ const Map = forwardRef<MapHandle, MapProps>(({
         // Erstelle ein benutzerdefiniertes Icon für den POI
         const poiIcon = L.divIcon({
           className: 'poi-icon',
-          html: `<div style="background-color: #f44336; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; display: flex; justify-content: center; align-items: center;">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="10" height="10" fill="white">
+          html: `<div style="background-color: #f44336; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; display: flex; justify-content: center; align-items: center;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14px" height="14px" fill="white">
                     <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
                   </svg>
                 </div>`,
-          iconSize: [18, 18],
-          iconAnchor: [9, 9]
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
         });
         
         // Erstelle den Marker mit dem benutzerdefinierten Icon

@@ -505,7 +505,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ user, mapRef, onClose }) => {
       sx={{ 
         position: 'fixed',
         top: 80,
-        right: 20,
+        left: '50%',
+        transform: 'translateX(-50%)',
         width: 380,
         maxWidth: '90vw',
         maxHeight: 'calc(100vh - 100px)',

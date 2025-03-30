@@ -738,7 +738,6 @@ const Map = forwardRef<MapHandle, MapProps>(({
               <hr style="border: 0; border-top: 1px solid #eee; margin: 8px 0;">
               <div style="display: flex; justify-content: space-between; font-size: 13px;">
                 <span><strong>Länge:</strong> ${calculateRouteLength(route.points).toFixed(2)} km</span>
-                <span><strong>Erstellt:</strong> ${route.createdAt.toLocaleDateString()}</span>
               </div>
                 <div style="margin-top: 8px; font-size: 13px;">
                   <strong>Bewertung:</strong> 
@@ -769,8 +768,8 @@ const Map = forwardRef<MapHandle, MapProps>(({
                   </span>
                 </div>` : ''}
               
-              <!-- Zusätzliche Routeninformationen -->
-              ${route.traffic !== undefined ? `
+              <!-- Verkehrsdichte anzeigen -->
+              ${route.traffic ? `
                 <div style="margin-top: 5px; font-size: 13px;">
                   <strong>Verkehrsdichte:</strong> 
                   <span style="padding: 2px 8px; border-radius: 10px; background-color: ${
@@ -788,42 +787,45 @@ const Map = forwardRef<MapHandle, MapProps>(({
                   </span>
                 </div>` : ''}
               
-              ${route.roadQuality !== undefined ? `
+              <!-- Straßenqualität anzeigen -->
+              ${route.roadQuality ? `
                 <div style="margin-top: 5px; font-size: 13px;">
                   <strong>Straßenqualität:</strong> 
                   <span style="padding: 2px 8px; border-radius: 10px; background-color: ${
-                    route.roadQuality >= 4 ? '#4CAF50' :
-                    route.roadQuality >= 3 ? '#8BC34A' : 
-                    route.roadQuality >= 2 ? '#FFC107' : 
-                    route.roadQuality >= 1 ? '#FF9800' : '#FF5722'
+                    route.roadQuality <= 1 ? '#4CAF50' :
+                    route.roadQuality <= 2 ? '#8BC34A' : 
+                    route.roadQuality <= 3 ? '#FFC107' : 
+                    route.roadQuality <= 4 ? '#FF9800' : '#FF5722'
                   }; color: white; font-size: 12px;">
                     ${
-                      route.roadQuality >= 4 ? 'Sehr gut' :
-                      route.roadQuality >= 3 ? 'Gut' : 
-                      route.roadQuality >= 2 ? 'Mittel' : 
-                      route.roadQuality >= 1 ? 'Schlecht' : 'Sehr schlecht'
+                      route.roadQuality <= 1 ? 'Sehr gut' :
+                      route.roadQuality <= 2 ? 'Gut' : 
+                      route.roadQuality <= 3 ? 'Durchschnittlich' : 
+                      route.roadQuality <= 4 ? 'Schlecht' : 'Sehr schlecht'
                     }
                   </span>
                 </div>` : ''}
               
-              ${route.scenery !== undefined ? `
+              <!-- Umgebung/Landschaft anzeigen -->
+              ${route.scenery ? `
                 <div style="margin-top: 5px; font-size: 13px;">
                   <strong>Umgebung:</strong> 
                   <span style="padding: 2px 8px; border-radius: 10px; background-color: ${
-                    route.scenery >= 4 ? '#4CAF50' :
-                    route.scenery >= 3 ? '#8BC34A' : 
-                    route.scenery >= 2 ? '#FFC107' : 
-                    route.scenery >= 1 ? '#FF9800' : '#FF5722'
+                    route.scenery === 1 ? '#4CAF50' :
+                    route.scenery === 2 ? '#8BC34A' : 
+                    route.scenery === 3 ? '#FFC107' : 
+                    route.scenery === 4 ? '#FF9800' : '#FF5722'
                   }; color: white; font-size: 12px;">
                     ${
-                      route.scenery >= 4 ? 'Sehr schön' :
-                      route.scenery >= 3 ? 'Schön' : 
-                      route.scenery >= 2 ? 'Durchschnittlich' : 
-                      route.scenery >= 1 ? 'Wenig attraktiv' : 'Nicht attraktiv'
+                      route.scenery === 1 ? 'Stadt' :
+                      route.scenery === 2 ? 'Land' : 
+                      route.scenery === 3 ? 'Wald' : 
+                      route.scenery === 4 ? 'Berg' : 'Meer'
                     }
                   </span>
                 </div>` : ''}
               
+              <!-- Tags anzeigen -->
               ${route.tags && route.tags.length > 0 ? `
                 <div style="margin-top: 5px; font-size: 13px;">
                   <strong>Tags:</strong> 

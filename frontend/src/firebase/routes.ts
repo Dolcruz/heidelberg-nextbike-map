@@ -322,12 +322,13 @@ export const updateBikePath = async (
     roadQuality?: number, 
     traffic?: number, 
     scenery?: number,
-    tags?: string[]
+    tags?: string[],
+    slope?: string
   }
 ): Promise<boolean> => {
   try {
     // Überprüfen, ob nur die erlaubten Felder aktualisiert werden
-    const allowedFields = ['name', 'description', 'roadQuality', 'traffic', 'scenery', 'tags'];
+    const allowedFields = ['name', 'description', 'roadQuality', 'traffic', 'scenery', 'tags', 'slope'];
     const updateData: {[key: string]: any} = {};
     
     Object.keys(data).forEach(key => {

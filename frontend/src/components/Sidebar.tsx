@@ -90,7 +90,8 @@ const Sidebar: React.FC = () => {
     roadQuality: 0,
     traffic: 0,
     scenery: 0,
-    tags: [] as string[]
+    tags: [] as string[],
+    slope: ''
   });
   const [newTag, setNewTag] = useState('');
 
@@ -445,7 +446,8 @@ const Sidebar: React.FC = () => {
       roadQuality: route.roadQuality || 0,
       traffic: route.traffic || 0,
       scenery: route.scenery || 0,
-      tags: route.tags || []
+      tags: route.tags || [],
+      slope: route.slope || ''
     });
     setEditDialogOpen(true);
   };
@@ -495,7 +497,8 @@ const Sidebar: React.FC = () => {
         roadQuality: editFormData.roadQuality,
         traffic: editFormData.traffic,
         scenery: editFormData.scenery,
-        tags: editFormData.tags
+        tags: editFormData.tags,
+        slope: editFormData.slope
       });
       
       if (success) {
@@ -1110,6 +1113,22 @@ const Sidebar: React.FC = () => {
             value={editFormData.description}
             onChange={(e) => handleEditFormChange('description', e.target.value)}
           />
+          <FormControl fullWidth margin="dense">
+            <InputLabel id="slope-label">Steigung</InputLabel>
+            <Select
+              labelId="slope-label"
+              id="slope"
+              value={editFormData.slope}
+              label="Steigung"
+              onChange={(e) => handleEditFormChange('slope', e.target.value)}
+            >
+              <MenuItem value="">Keine Angabe</MenuItem>
+              <MenuItem value="flach">Flach</MenuItem>
+              <MenuItem value="leicht">Leicht</MenuItem>
+              <MenuItem value="mittel">Mittel</MenuItem>
+              <MenuItem value="steil">Steil</MenuItem>
+            </Select>
+          </FormControl>
           <FormControl fullWidth margin="dense">
             <InputLabel id="road-quality-label">Straßenqualität</InputLabel>
             <Select

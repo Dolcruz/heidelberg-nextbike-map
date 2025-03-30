@@ -70,7 +70,7 @@ export const saveBikeStand = async (
  */
 export const getAllBikeStands = async (): Promise<BikeStand[]> => {
   try {
-    // Fahrradständer abrufen, die entweder explizit genehmigt wurden oder vom Admin erstellt
+    // Fahrradständer abrufen
     const q = query(
       collection(db, 'bikeStands')
     );
@@ -83,10 +83,8 @@ export const getAllBikeStands = async (): Promise<BikeStand[]> => {
       
       // Wir betrachten einen Fahrradständer als genehmigt, wenn:
       // 1. isApproved explizit auf true gesetzt ist, oder
-      // 2. isAdminCreated auf true gesetzt ist, oder
-      // 3. isApproved und isAdminCreated nicht definiert sind (Abwärtskompatibilität für ältere Einträge)
-      const isApproved = data.isApproved === true || data.isAdminCreated === true || 
-                         (data.isApproved === undefined && data.isAdminCreated === undefined);
+      // 2. isAdminCreated auf true gesetzt ist
+      const isApproved = data.isApproved === true || data.isAdminCreated === true;
       
       // Nur genehmigte Fahrradständer zur Liste hinzufügen
       if (isApproved) {

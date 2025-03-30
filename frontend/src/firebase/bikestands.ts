@@ -70,33 +70,44 @@ export const saveBikeStand = async (
  */
 export const getAllBikeStands = async (): Promise<BikeStand[]> => {
   try {
-    // Nur Fahrradständer abrufen, die entweder genehmigt oder vom Admin erstellt wurden
+    // Fahrradständer abrufen, die entweder explizit genehmigt wurden oder vom Admin erstellt
     const q = query(
-      collection(db, 'bikeStands'),
-      where('isApproved', '==', true)
+      collection(db, 'bikeStands')
     );
+    
     const querySnapshot = await getDocs(q);
     const bikeStands: BikeStand[] = [];
     
     querySnapshot.forEach((doc) => {
       const data = doc.data();
-      bikeStands.push({
-        id: doc.id,
-        position: {
-          lat: data.position.lat,
-          lng: data.position.lng
-        },
-        createdAt: data.createdAt?.toDate() || new Date(),
-        createdBy: data.createdBy,
-        description: data.description,
-        capacity: data.capacity,
-        isRoofed: data.isRoofed || false,
-        isFree: data.isFree !== false, // Default ist true, wenn nicht angegeben
-        isLighted: data.isLighted || false,
-        rating: data.rating,
-        isAdminCreated: data.isAdminCreated || false,
-        isApproved: data.isApproved || false
-      });
+      
+      // Wir betrachten einen Fahrradständer als genehmigt, wenn:
+      // 1. isApproved explizit auf true gesetzt ist, oder
+      // 2. isAdminCreated auf true gesetzt ist, oder
+      // 3. isApproved und isAdminCreated nicht definiert sind (Abwärtskompatibilität für ältere Einträge)
+      const isApproved = data.isApproved === true || data.isAdminCreated === true || 
+                         (data.isApproved === undefined && data.isAdminCreated === undefined);
+      
+      // Nur genehmigte Fahrradständer zur Liste hinzufügen
+      if (isApproved) {
+        bikeStands.push({
+          id: doc.id,
+          position: {
+            lat: data.position.lat,
+            lng: data.position.lng
+          },
+          createdAt: data.createdAt?.toDate() || new Date(),
+          createdBy: data.createdBy,
+          description: data.description,
+          capacity: data.capacity,
+          isRoofed: data.isRoofed || false,
+          isFree: data.isFree !== false, // Default ist true, wenn nicht angegeben
+          isLighted: data.isLighted || false,
+          rating: data.rating,
+          isAdminCreated: data.isAdminCreated || false,
+          isApproved: true // Explizit auf true setzen, da der Eintrag genehmigt ist
+        });
+      }
     });
     
     return bikeStands;
@@ -288,15 +299,15 @@ export const getAllAdminBikeStands = async (): Promise<BikeStand[]> => {
  */
 export const getUnapprovedBikeStands = async (): Promise<BikeStand[]> => {
   try {
-    // Wir suchen nach Fahrradständern, die nicht vom Admin erstellt wurden und noch nicht freigegeben sind
+    // Wir suchen nach Fahrradständern, die noch nicht freigegeben sind
     const q = query(
       collection(db, 'bikeStands'), 
-      where('isAdminCreated', '==', false),
       where('isApproved', '==', false)
     );
     
     const querySnapshot = await getDocs(q);
     
+    // Wir filtern in der Client-Anwendung statt in Firestore
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
       return {

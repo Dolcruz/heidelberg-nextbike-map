@@ -56,7 +56,7 @@ let DefaultIcon = L.icon({
 // Kleinerer, zusätzlicher Icon für Routenpunkte
 let RoutePointIcon = L.icon({
   iconUrl: icon,
-  shadowUrl: iconShadow,
+  shadowUrl: '', // Entferne Schatten vollständig
   iconSize: [15, 25],
   iconAnchor: [7, 25]
 });
@@ -424,22 +424,38 @@ const Map = forwardRef<MapHandle, MapProps>(({
     const map = mapRef.current;
     if (!map) return;
     
-    // Prüfe, ob der Klick von einem UI-Element (wie dem Speichern-Button) stammt
-    // Wenn das Event ein originalEvent enthält und dieses eine "button"-Eigenschaft hat,
-    // dann ist es höchstwahrscheinlich ein Klick auf ein UI-Element
-    const eventTarget = e.originalEvent?.target as HTMLElement;
-    if (eventTarget && (
-      eventTarget.tagName === 'BUTTON' || 
-      eventTarget.closest('button') || 
-      eventTarget.classList.contains('MuiFab-root') ||
-      eventTarget.closest('.MuiFab-root')
-    )) {
-      console.log('Klick auf Button erkannt, ignoriere für Routenpunkte');
+    // Erstelle einen neuen Punkt an der geklickten Position
+    const newPoint = e.latlng;
+    
+    // Im Fahrradständer-Modus
+    if (isBikeStandMode) {
+      handleBikeStandClick(e);
       return;
     }
     
-    const newPoint = e.latlng;
-    console.log('Map clicked at:', newPoint);
+    // Im Nextbike-Modus
+    if (isNextBikeMode) {
+      handleNextbikeClick(e);
+      return;
+    }
+    
+    // Im Reparaturstations-Modus
+    if (isRepairStationMode) {
+      handleRepairStationClick(e);
+      return;
+    }
+    
+    // Im Ladestations-Modus
+    if (isChargingStationMode) {
+      handleChargingStationClick(e);
+      return;
+    }
+    
+    // Im POI-Modus
+    if (isPoiMode) {
+      handlePoiClick(e);
+      return;
+    }
     
     // Im Zeichenmodus
     if (isDrawingMode) {
@@ -464,66 +480,43 @@ const Map = forwardRef<MapHandle, MapProps>(({
       if (nearestSegment && nearestSegment.distance < 0.005) {
         console.log('Clicked near route segment, distance:', nearestSegment.distance);
         
-        // Zeige den Add-Point-Marker an
-        const addPointMarker = L.marker(newPoint, { 
-          icon: AddPointIcon,
-          opacity: 0.9
-        }).addTo(map);
-        
-        // Füge das Popup mit der Funktion zum Hinzufügen des Punktes hinzu
-        addPointMarker.bindPopup(`
-          <div style="text-align: center;">
-            <h4 style="margin: 5px 0;">Routenpunkt hinzufügen</h4>
-            <p style="margin: 5px 0;">Möchtest du an dieser Stelle einen Routenpunkt hinzufügen?</p>
-            <button id="add-point-btn" style="background-color: #2196f3; color: white; border: none; border-radius: 4px; padding: 5px 12px; margin-top: 5px; cursor: pointer;">
-              Punkt hinzufügen
-            </button>
-          </div>
-        `).openPopup();
-        
-        // Event-Handler für den Button im Popup
-        setTimeout(() => {
-          const addButton = document.getElementById('add-point-btn');
-          if (addButton) {
-            addButton.addEventListener('click', async () => {
-              // Füge den Punkt zur Route hinzu
-              await addPointToExistingRoute(
-                nearestSegment.routeId,
-                nearestSegment.insertIndex,
-                newPoint
-              );
-              
-              // Entferne den Marker und schließe das Popup
-              addPointMarker.remove();
-              map.closePopup();
-            });
-          }
-        }, 10);
-        
+        // Statt Popup anzeigen, sofort einen Punkt hinzufügen, wenn im Zeichenmodus
+        addPointToExistingRoute(
+          nearestSegment.routeId,
+          nearestSegment.insertIndex,
+          newPoint
+        );
         return;
       }
       
       // Normal case: Add a new point
       const newPoints = [...points, newPoint];
       setPoints(newPoints);
-
-      // Remove existing polyline
+      
+      // Füge einen Marker für diesen Punkt hinzu
+      const marker = L.marker(newPoint).addTo(map);
+      markersRef.current.push(marker);
+      
+      // Aktualisiere die Polyline
       if (polylineRef.current) {
         polylineRef.current.remove();
       }
-
-      // Draw new polyline
+      
       const polyline = L.polyline(newPoints, {
         color: 'blue',
         weight: 4,
         opacity: 0.7
       }).addTo(map);
-
+      
       polylineRef.current = polyline;
-
-      // Add marker for each point
-      const marker = L.marker(newPoint).addTo(map);
-      markersRef.current.push(marker);
+      
+      // Wenn die Route mindestens 2 Punkte hat, kann sie abgeschlossen werden
+      if (onRouteComplete && newPoints.length >= 2) {
+        onRouteComplete(newPoints);
+        
+        // Bereinige die Karte nach dem Speichern der Route
+        clearRoute();
+      }
     }
   }
 

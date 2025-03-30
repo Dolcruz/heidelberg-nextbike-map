@@ -139,7 +139,6 @@ export interface MapHandle {
 interface MapProps {
   isDrawingMode: boolean;
   isBikeStandMode?: boolean;
-  isNextBikeMode?: boolean;
   isRepairStationMode?: boolean;
   isChargingStationMode?: boolean;
   isPoiMode?: boolean;
@@ -152,7 +151,6 @@ interface MapProps {
 const Map = forwardRef<MapHandle, MapProps>(({ 
   isDrawingMode, 
   isBikeStandMode = false,
-  isNextBikeMode = false,
   isRepairStationMode = false,
   isChargingStationMode = false,
   isPoiMode = false,
@@ -2202,9 +2200,9 @@ const Map = forwardRef<MapHandle, MapProps>(({
         
         // Eigenschaften anzeigen
         let propertiesHtml = '';
-        if (bikeStand.isRoofed) propertiesHtml += '<span style="margin-right: 10px;"><i class="material-icons" style="font-size: 16px; vertical-align: middle;">umbrella</i> Überdacht</span>';
-        if (bikeStand.isFree) propertiesHtml += '<span style="margin-right: 10px;"><i class="material-icons" style="font-size: 16px; vertical-align: middle;">euro_symbol</i> Kostenlos</span>';
-        if (bikeStand.isLighted) propertiesHtml += '<span><i class="material-icons" style="font-size: 16px; vertical-align: middle;">lightbulb</i> Beleuchtet</span>';
+        if (bikeStand.isRoofed) propertiesHtml += '<span style="margin-right: 10px;"><span style="font-size: 16px; vertical-align: middle;">☂️</span> Überdacht</span>';
+        if (bikeStand.isFree) propertiesHtml += '<span style="margin-right: 10px;"><span style="font-size: 16px; vertical-align: middle;">€</span> Kostenlos</span>';
+        if (bikeStand.isLighted) propertiesHtml += '<span><span style="font-size: 16px; vertical-align: middle;">💡</span> Beleuchtet</span>';
         
         if (propertiesHtml) {
           popupContent += `
@@ -3299,16 +3297,12 @@ const Map = forwardRef<MapHandle, MapProps>(({
     if (!map) return;
     
     // Clean up previous click handlers to avoid duplicates
-    map.off('click', handleNextbikeClick);
     map.off('click', handleRepairStationClick);
     map.off('click', handleChargingStationClick);
     map.off('click', handlePoiClick);
     
     // Add click handlers only when in the respective mode
-    if (isNextBikeMode) {
-      map.on('click', handleNextbikeClick);
-      console.log("Nextbike mode activated - map click handler added");
-    } else if (isRepairStationMode) {
+    if (isRepairStationMode) {
       map.on('click', handleRepairStationClick);
       console.log("Repair station mode activated - map click handler added");
     } else if (isChargingStationMode) {
@@ -3320,12 +3314,11 @@ const Map = forwardRef<MapHandle, MapProps>(({
     }
     
     return () => {
-      map.off('click', handleNextbikeClick);
       map.off('click', handleRepairStationClick);
       map.off('click', handleChargingStationClick);
       map.off('click', handlePoiClick);
     };
-  }, [isNextBikeMode, isRepairStationMode, isChargingStationMode, isPoiMode]);
+  }, [isRepairStationMode, isChargingStationMode, isPoiMode]);
 
   // Lade alle POIs beim Komponentenaufbau
   useEffect(() => {

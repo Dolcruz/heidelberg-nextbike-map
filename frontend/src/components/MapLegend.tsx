@@ -105,9 +105,9 @@ const MapLegend: React.FC<MapLegendProps> = ({
                     width: 12, 
                     height: 12, 
                     borderRadius: '50%', 
-                    bgcolor: '#ff6b6b', 
+                    bgcolor: '#4CAF50', 
                     border: '2px solid white',
-                    boxShadow: '0 0 0 1px #ff6b6b',
+                    boxShadow: '0 0 0 1px #4CAF50',
                     ml: 1
                   }} 
                 />

@@ -459,9 +459,9 @@ const Map = forwardRef<MapHandle, MapProps>(({
       // Überprüfe, ob in der Nähe eines Routensegments geklickt wurde
       const nearestSegment = findNearestRouteSegment(newPoint);
       
-      // Wenn wir in der Nähe eines Routensegments geklickt haben (innerhalb von 5 Metern)
-      // Reduzierter Radius von 0.02km (20m) auf 0.005km (5m) für bessere Präzision
-      if (nearestSegment && nearestSegment.distance < 0.005) {
+      // Wenn wir in der Nähe eines Routensegments geklickt haben (innerhalb von 10 Metern)
+      // Erhöhter Radius von 0.005km (5m) auf 0.01km (10m) für bessere Benutzbarkeit
+      if (nearestSegment && nearestSegment.distance < 0.01) {
         console.log('Clicked near route segment, distance:', nearestSegment.distance);
         
         // Berechne den genauen Punkt auf dem Segment (Projektion des Klickpunkts)
@@ -888,6 +888,9 @@ const Map = forwardRef<MapHandle, MapProps>(({
             // Im Zeichenmodus klickbar machen für die Verbindungsfunktion
             polyline.on('click', (e) => {
               if (isDrawingMode) {
+                // Verhindere Standard-Popup und Propagation zur Karte
+                L.DomEvent.stopPropagation(e);
+                
                 // Berechne den nächsten Punkt auf der Polylinie (Projektion)
                 const clickPoint = e.latlng;
                 let minDistance = Infinity;
@@ -915,7 +918,8 @@ const Map = forwardRef<MapHandle, MapProps>(({
                   }
                 }
                 
-                if (nearestSegment && nearestSegment.distance < 0.005) { // 5 Meter Radius
+                // Beim Klick auf eine Polyline sollten wir immer ein nächstes Segment haben
+                if (nearestSegment) { // Entferne Distanzprüfung hier, wir sind auf der Polyline!
                   // Berechne den genauen Projektionspunkt
                   const projectionPoint = calculateProjectionPoint(clickPoint, nearestSegment.segment[0], nearestSegment.segment[1]);
                   
@@ -977,9 +981,6 @@ const Map = forwardRef<MapHandle, MapProps>(({
                     }
                   }, 10);
                 }
-                
-                // Verhindere, dass der Klick an die Karte weitergeleitet wird
-                L.DomEvent.stopPropagation(e);
               }
             });
           }

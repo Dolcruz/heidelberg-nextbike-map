@@ -2200,9 +2200,9 @@ const Map = forwardRef<MapHandle, MapProps>(({
         
         // Eigenschaften anzeigen
         let propertiesHtml = '';
-        if (bikeStand.isRoofed) propertiesHtml += '<span style="margin-right: 10px;"><i class="material-icons" style="font-size: 16px; vertical-align: middle;">umbrella</i> Überdacht</span>';
-        if (bikeStand.isFree) propertiesHtml += '<span style="margin-right: 10px;"><i class="material-icons" style="font-size: 16px; vertical-align: middle;">euro_symbol</i> Kostenlos</span>';
-        if (bikeStand.isLighted) propertiesHtml += '<span><i class="material-icons" style="font-size: 16px; vertical-align: middle;">lightbulb</i> Beleuchtet</span>';
+        if (bikeStand.isRoofed) propertiesHtml += '<span style="margin-right: 10px;"><span style="font-size: 16px; vertical-align: middle;">☂️</span> Überdacht</span>';
+        if (bikeStand.isFree) propertiesHtml += '<span style="margin-right: 10px;"><span style="font-size: 16px; vertical-align: middle;">€</span> Kostenlos</span>';
+        if (bikeStand.isLighted) propertiesHtml += '<span><span style="font-size: 16px; vertical-align: middle;">💡</span> Beleuchtet</span>';
         
         if (propertiesHtml) {
           popupContent += `
@@ -3253,8 +3253,12 @@ const Map = forwardRef<MapHandle, MapProps>(({
 
   // Neuer Handler für Klicks im Nextbike-Modus
   const handleNextbikeClick = (e: L.LeafletMouseEvent) => {
-    // Nextbike-Funktionalität wurde entfernt
-    return;
+    if (!isNextBikeMode) return;
+    
+    console.log('Adding nextbike station at:', e.latlng);
+    if (onAddPOI) {
+      onAddPOI(e.latlng, 'nextBike');
+    }
   };
 
   // Neuer Handler für Klicks im Reparaturstations-Modus

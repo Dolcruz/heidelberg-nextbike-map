@@ -37,7 +37,6 @@ export type EditMode =
   | 'bikePath' 
   | 'bikeStand' 
   | 'poi' 
-  | 'nextBike' 
   | 'repairStation' 
   | 'chargingStation';
 
@@ -117,18 +116,6 @@ const EditSidebar: React.FC<EditSidebarProps> = ({
               <LocalParkingIcon color={currentMode === 'bikeStand' ? 'primary' : 'inherit'} />
             </ListItemIcon>
             <ListItemText primary="Fahrradständer hinzufügen" />
-          </ListItemButton>
-        </ListItem>
-
-        <ListItem disablePadding>
-          <ListItemButton 
-            selected={currentMode === 'nextBike'} 
-            onClick={() => handleModeSelect('nextBike')}
-          >
-            <ListItemIcon>
-              <PedalBikeIcon color={currentMode === 'nextBike' ? 'primary' : 'inherit'} />
-            </ListItemIcon>
-            <ListItemText primary="Nextbike-Station hinzufügen" />
           </ListItemButton>
         </ListItem>
 

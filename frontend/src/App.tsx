@@ -48,7 +48,6 @@ const theme = createTheme({
 const App: React.FC = () => {
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [isBikeStandMode, setIsBikeStandMode] = useState(false);
-  const [isNextBikeMode, setIsNextBikeMode] = useState(false);
   const [isRepairStationMode, setIsRepairStationMode] = useState(false);
   const [isChargingStationMode, setIsChargingStationMode] = useState(false);
   const [isPoiMode, setIsPoiMode] = useState(false);
@@ -134,7 +133,6 @@ const App: React.FC = () => {
       setCurrentEditMode(null);
       setIsDrawingMode(false);
       setIsBikeStandMode(false);
-      setIsNextBikeMode(false);
       setIsRepairStationMode(false);
       setIsChargingStationMode(false);
       setIsPoiMode(false);
@@ -147,7 +145,6 @@ const App: React.FC = () => {
     // Deaktiviere alle Modi
     setIsDrawingMode(false);
     setIsBikeStandMode(false);
-    setIsNextBikeMode(false);
     setIsRepairStationMode(false);
     setIsChargingStationMode(false);
     setIsPoiMode(false);
@@ -159,9 +156,6 @@ const App: React.FC = () => {
         break;
       case 'bikeStand':
         setIsBikeStandMode(true);
-        break;
-      case 'nextBike':
-        setIsNextBikeMode(true);
         break;
       case 'repairStation':
         setIsRepairStationMode(true);
@@ -184,12 +178,10 @@ const App: React.FC = () => {
   const toggleEditSidebar = () => {
     // Wenn die Sidebar geöffnet wird, setzen wir nichts zurück
     // Wenn die Sidebar geschlossen wird und ein Modus aktiv ist, setzen wir diesen zurück
-    if (editSidebarOpen && (isDrawingMode || isBikeStandMode || isNextBikeMode || 
-                             isRepairStationMode || isChargingStationMode || isPoiMode)) {
+    if (editSidebarOpen && (isDrawingMode || isBikeStandMode || isRepairStationMode || isChargingStationMode || isPoiMode)) {
       // Alle Modi deaktivieren
       setIsDrawingMode(false);
       setIsBikeStandMode(false);
-      setIsNextBikeMode(false);
       setIsRepairStationMode(false);
       setIsChargingStationMode(false);
       setIsPoiMode(false);
@@ -381,7 +373,6 @@ const App: React.FC = () => {
     
     // Beende den POI-Modus
     setCurrentEditMode(null);
-    setIsNextBikeMode(false);
     setIsRepairStationMode(false);
     setIsChargingStationMode(false);
     setIsPoiMode(false);
@@ -394,7 +385,7 @@ const App: React.FC = () => {
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
           <Navbar 
             onDrawingModeToggle={toggleEditSidebar}
-            isDrawingMode={isDrawingMode || isBikeStandMode || isNextBikeMode || isRepairStationMode || isChargingStationMode || isPoiMode}
+            isDrawingMode={isDrawingMode || isBikeStandMode || isRepairStationMode || isChargingStationMode || isPoiMode}
             onBikeStandModeToggle={toggleBikeStandMode}
             isBikeStandMode={isBikeStandMode}
             onSearchLocation={handleLocationSearch}
@@ -406,7 +397,6 @@ const App: React.FC = () => {
               ref={mapRef}
               isDrawingMode={isDrawingMode}
               isBikeStandMode={isBikeStandMode}
-              isNextBikeMode={isNextBikeMode}
               isRepairStationMode={isRepairStationMode}
               isChargingStationMode={isChargingStationMode}
               isPoiMode={isPoiMode}

@@ -262,7 +262,11 @@ const Navbar: React.FC<NavbarProps> = ({ onDrawingModeToggle, isDrawingMode, onB
             aria-label="menu"
             sx={{ mr: 2 }}
           >
-            <DirectionsBikeIcon />
+            <img 
+              src={`${process.env.PUBLIC_URL}/android-chrome-512x512.png`} 
+              alt="Bike Route App Logo" 
+              style={{ width: 32, height: 32 }}
+            />
           </IconButton>
           <Typography variant="h6" component="div">
             Bike Route Mapper

@@ -81,8 +81,6 @@ const POIDialog: React.FC<POIDialogProps> = ({
   // Dialog-Titel basierend auf dem POI-Typ
   const getDialogTitle = () => {
     switch (poiType) {
-      case 'nextBike':
-        return 'Nextbike-Station hinzufügen';
       case 'repairStation':
         return 'Reparatur-Station hinzufügen';
       case 'chargingStation':
@@ -103,11 +101,7 @@ const POIDialog: React.FC<POIDialogProps> = ({
     setError('');
 
     // Spezifische Felder zurücksetzen je nach POI-Typ
-    if (poiType === 'nextBike') {
-      setBikeCapacity('');
-      setProvider('nextbike');
-      setIsActive(true);
-    } else if (poiType === 'repairStation') {
+    if (poiType === 'repairStation') {
       setHasAirPump(false);
       setHasTools(false);
       setIsPublic(true);
@@ -154,14 +148,7 @@ const POIDialog: React.FC<POIDialogProps> = ({
       };
 
       // Je nach POI-Typ den entsprechenden Service aufrufen
-      if (poiType === 'nextBike') {
-        await addNextbikeStation({
-          ...basePoi,
-          bikeCapacity: bikeCapacity === '' ? undefined : Number(bikeCapacity),
-          provider,
-          isActive
-        });
-      } else if (poiType === 'repairStation') {
+      if (poiType === 'repairStation') {
         await addRepairStation({
           ...basePoi,
           hasAirPump,
@@ -203,50 +190,6 @@ const POIDialog: React.FC<POIDialogProps> = ({
   // Rendere spezifische Felder je nach POI-Typ
   const renderSpecificFields = () => {
     switch (poiType) {
-      case 'nextBike':
-        return (
-          <>
-            <Grid item xs={12}>
-              <TextField
-                label="Fahrradkapazität"
-                type="number"
-                value={bikeCapacity}
-                onChange={(e) => setBikeCapacity(e.target.value === '' ? '' : Number(e.target.value))}
-                fullWidth
-                inputProps={{ min: 1 }}
-                helperText="Wie viele Fahrräder können an dieser Station ausgeliehen werden?"
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>Anbieter</InputLabel>
-                <Select
-                  value={provider}
-                  label="Anbieter"
-                  onChange={(e) => setProvider(e.target.value)}
-                >
-                  <MenuItem value="nextbike">NextBike</MenuItem>
-                  <MenuItem value="velo">Call a Bike / VRN Nextbike</MenuItem>
-                  <MenuItem value="kvb">KVB Rad</MenuItem>
-                  <MenuItem value="other">Anderer Anbieter</MenuItem>
-                </Select>
-                <FormHelperText>Der Anbieter dieser Fahrradverleih-Station</FormHelperText>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Switch 
-                    checked={isActive}
-                    onChange={(e) => setIsActive(e.target.checked)}
-                  />
-                }
-                label="Station ist aktiv"
-              />
-            </Grid>
-          </>
-        );
-
       case 'repairStation':
         return (
           <>

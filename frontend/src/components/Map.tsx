@@ -3255,12 +3255,8 @@ const Map = forwardRef<MapHandle, MapProps>(({
 
   // Neuer Handler für Klicks im Nextbike-Modus
   const handleNextbikeClick = (e: L.LeafletMouseEvent) => {
-    if (!isNextBikeMode) return;
-    
-    console.log('Adding nextbike station at:', e.latlng);
-    if (onAddPOI) {
-      onAddPOI(e.latlng, 'nextBike');
-    }
+    // Nextbike-Funktionalität wurde entfernt
+    return;
   };
 
   // Neuer Handler für Klicks im Reparaturstations-Modus

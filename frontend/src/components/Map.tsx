@@ -482,17 +482,17 @@ const Map = forwardRef<MapHandle, MapProps>(({
         
         // Statt Popup anzeigen, sofort einen Punkt hinzufügen, wenn im Zeichenmodus
         addPointToExistingRoute(
-          nearestSegment.routeId,
-          nearestSegment.insertIndex,
-          newPoint
-        );
+                nearestSegment.routeId,
+                nearestSegment.insertIndex,
+                newPoint
+              );
         return;
       }
       
       // Normal case: Add a new point
       const newPoints = [...points, newPoint];
       setPoints(newPoints);
-      
+
       // Füge einen Marker für diesen Punkt hinzu
       const marker = L.marker(newPoint).addTo(map);
       markersRef.current.push(marker);
@@ -501,15 +501,15 @@ const Map = forwardRef<MapHandle, MapProps>(({
       if (polylineRef.current) {
         polylineRef.current.remove();
       }
-      
+
       const polyline = L.polyline(newPoints, {
         color: 'blue',
         weight: 4,
         opacity: 0.7
       }).addTo(map);
-      
+
       polylineRef.current = polyline;
-      
+
       // Wenn die Route mindestens 2 Punkte hat, kann sie abgeschlossen werden
       if (onRouteComplete && newPoints.length >= 2) {
         onRouteComplete(newPoints);
@@ -850,6 +850,58 @@ const Map = forwardRef<MapHandle, MapProps>(({
           
           // Zeige Popup mit erweiterten Infos beim Klick an
           polyline.bindPopup(popupContent);
+          
+          // Im Zeichenmodus die Popup-Anzeige verhindern und stattdessen Pin platzieren
+          polyline.on('click', (e) => {
+            if (isDrawingMode) {
+              // Klickevent stoppen, damit kein Popup geöffnet wird
+              e.originalEvent.stopPropagation();
+              L.DomEvent.stop(e);
+              
+              console.log('Route im Zeichenmodus angeklickt:', route.id);
+              
+              // Neuen Punkt an der geklickten Position erstellen
+              const clickedPoint = e.latlng;
+              
+              // Wenn bereits Punkte vorhanden sind, füge den neuen Punkt zur aktuellen Route hinzu
+              if (points.length > 0) {
+                const newPoints = [...points, clickedPoint];
+                setPoints(newPoints);
+                
+                // Füge einen Marker für diesen Punkt hinzu
+                const map = mapRef.current;
+                if (map) {
+                  const marker = L.marker(clickedPoint).addTo(map);
+                  markersRef.current.push(marker);
+                  
+                  // Aktualisiere die Polyline
+                  if (polylineRef.current) {
+                    polylineRef.current.remove();
+                  }
+                  
+                  const polyline = L.polyline(newPoints, {
+                    color: 'blue',
+                    weight: 4,
+                    opacity: 0.7
+                  }).addTo(map);
+                  
+                  polylineRef.current = polyline;
+                }
+              } else {
+                // Wenn noch keine Punkte vorhanden sind, starte eine neue Route von diesem Punkt
+                setPoints([clickedPoint]);
+                
+                // Füge einen Marker für diesen Punkt hinzu
+                const map = mapRef.current;
+                if (map) {
+                  const marker = L.marker(clickedPoint).addTo(map);
+                  markersRef.current.push(marker);
+                }
+              }
+              
+              return false;
+            }
+          });
           
           // Event-Handler zum Löschen eines Fahrradwegs hinzufügen
           if (route.id) {
@@ -2350,8 +2402,8 @@ const Map = forwardRef<MapHandle, MapProps>(({
           });
           
           // Add marker to the reference array
-          nextbikeMarkersRef.current.push(marker);
-        });
+        nextbikeMarkersRef.current.push(marker);
+      });
       }
     } catch (error) {
       console.error('Error fetching and displaying nextbike stations:', error);
@@ -2565,7 +2617,7 @@ const Map = forwardRef<MapHandle, MapProps>(({
         // Füge Lösch-Button hinzu, wenn der aktuelle Benutzer der Ersteller ist oder ein Admin
         const currentUser = auth.currentUser;
         if (currentUser && (currentUser.uid === station.createdBy || currentUser.email === ADMIN_EMAIL)) {
-          popupContent += `
+        popupContent += `
             <div style="text-align: right; margin-top: 10px;">
               <button 
                 class="charging-delete-button" 
@@ -2573,8 +2625,8 @@ const Map = forwardRef<MapHandle, MapProps>(({
                 data-charging-id="${station.id}">
                 Löschen${currentUser.email === ADMIN_EMAIL && currentUser.uid !== station.createdBy ? ' (Admin)' : ''}
               </button>
-            </div>
-          `;
+          </div>
+        `;
         }
         
         popupContent += '</div>';

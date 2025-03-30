@@ -342,8 +342,8 @@ export const updateBikePath = async (
       return false;
     }
 
-    // Fahrradweg aktualisieren
-    await updateDoc(doc(db, 'bikePaths', bikePathId), updateData);
+    // Fahrradweg aktualisieren - KORRIGIERT: 'routes' Collection verwenden statt 'bikePaths'
+    await updateDoc(doc(db, 'routes', bikePathId), updateData);
     return true;
   } catch (error) {
     console.error('Error updating bike path:', error);

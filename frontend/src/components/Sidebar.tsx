@@ -502,7 +502,10 @@ const Sidebar: React.FC = () => {
       });
       
       if (success) {
-        // UI aktualisieren: Fahrradweg in der Liste aktualisieren
+        // UI aktualisieren: Fahrradweg in allen Listen aktualisieren
+        // Dies stellt sicher, dass die Änderungen sofort sichtbar sind
+        
+        // Aktualisiere reguläre Fahrradwege
         setRoutes(prevRoutes => 
           prevRoutes.map(route => 
             route.id === editingBikePath.id 
@@ -510,11 +513,33 @@ const Sidebar: React.FC = () => {
               : route
           )
         );
+        
+        // Aktualisiere Navigationsrouten
+        setNavRoutes(prevRoutes => 
+          prevRoutes.map(route => 
+            route.id === editingBikePath.id 
+              ? { ...route, ...editFormData } 
+              : route
+          )
+        );
+        
+        // Aktualisiere öffentliche Routen
+        setPublicRoutes(prevRoutes => 
+          prevRoutes.map(route => 
+            route.id === editingBikePath.id 
+              ? { ...route, ...editFormData } 
+              : route
+          )
+        );
+        
+        // Zeige erfolgreiches Speichern als Alert an
+        alert('Änderungen wurden erfolgreich gespeichert!');
       }
       
       closeEditDialog();
     } catch (error) {
       console.error('Error saving changes:', error);
+      alert('Fehler beim Speichern der Änderungen. Bitte versuche es erneut.');
     }
   };
 
